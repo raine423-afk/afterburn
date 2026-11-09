@@ -1,0 +1,17 @@
+using System.ComponentModel;
+using DynamicData;
+using NexusMods.Abstractions.Games;
+using NexusMods.Abstractions.Loadouts;
+using NexusMods.App.UI.Controls;
+using NexusMods.Sdk.Loadouts;
+using R3;
+
+namespace NexusMods.App.UI.Pages.Sorting;
+
+public interface ILoadOrderDataProvider
+{
+    IObservable<IChangeSet<CompositeItemModel<ISortItemKey>, ISortItemKey>> ObserveLoadOrder(
+        ISortOrderVariety sortOrderVariety,
+        LoadoutId loadoutId,
+        Observable<ListSortDirection> sortDirectionObservable);
+}

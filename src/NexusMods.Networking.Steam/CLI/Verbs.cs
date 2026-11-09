@@ -1,0 +1,235 @@
+using System.Collections.Concurrent;
+using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using NexusMods.Abstractions.Cli;
+using NexusMods.Sdk.Hashes;
+using NexusMods.Abstractions.Steam;
+using NexusMods.Abstractions.Steam.DTOs;
+using NexusMods.Abstractions.Steam.Values;
+using NexusMods.Networking.Steam.Exceptions;
+using NexusMods.Paths;
+using NexusMods.Paths.Extensions;
+using NexusMods.Sdk.Jobs;
+using NexusMods.Sdk.ProxyConsole;
+
+namespace NexusMods.Networking.Steam.CLI;
+
+public static class Verbs
+{
+    internal static IServiceCollection AddSteamVerbs(this IServiceCollection collection) =>
+        collection
+            .AddModule("steam", "Verbs for interacting with Steam")
+            .AddModule("steam app", "Verbs for querying app data")
+            .AddVerb(() => IndexSteamApp)
+            .AddVerb(() => Login);
+    
+    [Verb("steam login", "Starts the login process for Steam")]
+    private static async Task<int> Login(
+        [Injected] IRenderer renderer,
+        [Injected] ISteamSession steamSession,
+        [Injected] CancellationToken token)
+    {
+        await steamSession.Connect(token);
+        return 0;
+    }
+    
+    
+    [Verb("steam app index", "Indexes a Steam app and updates the given output folder")]
+    private static async Task<int> IndexSteamApp(
+        [Injected] IRenderer renderer,
+        [Injected] JsonSerializerOptions jsonSerializerOptions,
+        [Injected] ISteamSession steamSession,
+        [Option("a", "appId", "The steam app id to index")] long appId,
+        [Option("o", "output", "The output folder to write the index to")] AbsolutePath output,
+        [Option("b", "branch", "Only index manifests from this Steam branch (e.g. 'public'). Indexes every branch when omitted.", true)] string? branch,
+        [Option("g", "gameFolder", "Local install of the game. Files that match the manifest are hashed from disk instead of being downloaded from Steam.", true)] string? gameFolderRaw,
+        [Injected] IFileSystem fileSystem,
+        [Injected] CancellationToken token)
+    {
+        AbsolutePath? gameFolder = string.IsNullOrWhiteSpace(gameFolderRaw)
+            ? null
+            : fileSystem.FromUnsanitizedFullPath(gameFolderRaw);
+
+        var steamAppId = AppId.From((uint)appId);
+        
+        var indentedOptions = new JsonSerializerOptions(jsonSerializerOptions)
+        {
+            WriteIndented = true,
+        };
+
+        RenderingAuthenticationHandler.Renderer = renderer;
+        await steamSession.Connect(token);
+
+        await using (var _ = await renderer.WithProgress())
+        {
+            {
+                var productInfo = await steamSession.GetProductInfoAsync(steamAppId, token);
+
+                var hashFolder = output / "hashes";
+                hashFolder.CreateDirectory();
+
+                var existingHashes = await LoadExistingHashes(hashFolder, indentedOptions, token);
+
+                // Write the product info to a file
+                var productFile = output / "stores" / "steam" / "apps" / (productInfo.AppId + ".json").ToRelativePath();
+                {
+                    productFile.Parent.CreateDirectory();
+                    await using var outputStream = productFile.Create();
+                    await JsonSerializer.SerializeAsync(outputStream, productInfo, indentedOptions,
+                        token
+                    );
+                }
+
+                var options = new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = 4,
+                    CancellationToken = token,
+                };
+                // For each depot and each manifest, download the manifest and index the files
+                await Parallel.ForEachAsync(productInfo.Depots, options, async (depot, token) =>
+                {
+                    var manifestsToIndex = depot.Manifests
+                        .Where(kv => string.IsNullOrEmpty(branch) || kv.Key.Equals(branch, StringComparison.OrdinalIgnoreCase));
+
+                    await Parallel.ForEachAsync(manifestsToIndex, options, async (manifestInfo, token) =>
+                    {
+                        try
+                        {
+                            var manifest = await steamSession.GetManifestContents(steamAppId, depot.DepotId, manifestInfo.Value.ManifestId,
+                                manifestInfo.Key, token
+                            );
+
+                            var manifestPath = output / "stores" / "steam" / "manifests" / (manifest.ManifestId + ".json").ToRelativePath();
+                            {
+                                manifestPath.Parent.CreateDirectory();
+                                while (true)
+                                {
+                                    try
+                                    {
+                                        await using var outputStream = manifestPath.Create();
+                                        await JsonSerializer.SerializeAsync(outputStream, manifest, indentedOptions,
+                                            token
+                                        );
+                                        break;
+                                    }
+                                    catch (IOException)
+                                    {
+                                        await Task.Delay(1000, token);
+                                    }
+                                }
+                            }
+
+                            await IndexManifest(steamSession, renderer, steamAppId,
+                                output, manifest, indentedOptions,
+                                existingHashes, options, gameFolder
+                            );
+                        }
+                        catch (FailedToGetRequestCode ex)
+                        {
+                            await renderer.Text($"Skipping because of: {ex.Message}");
+                            return;
+                        }
+                    });
+                });
+            }
+        }
+
+        return 0;
+    }
+
+    private static async Task<ConcurrentBag<Sha1Value>> LoadExistingHashes(AbsolutePath folder, JsonSerializerOptions options, CancellationToken token)
+    {
+        var bag = new ConcurrentBag<Sha1Value>();
+        var hashFiles = folder.EnumerateFiles("*.json", true);
+        
+        await Parallel.ForEachAsync(hashFiles, token, async (file, token) =>
+        {
+            try
+            {
+                await using var stream = file.Read();
+                var hash = await JsonSerializer.DeserializeAsync<MultiHash>(stream, options, token);
+                bag.Add(hash!.Sha1);
+            }
+            catch (Exception ex)
+            {
+                // Ignore errors
+                Console.WriteLine($"Error loading hash file {file}: {ex.Message}");
+            }
+        });
+
+        return bag;
+    }
+
+    private static async Task IndexManifest(ISteamSession session, IRenderer renderer, AppId appId, AbsolutePath output, Manifest manifest, JsonSerializerOptions indentedOptions, ConcurrentBag<Sha1Value> existingHashes, ParallelOptions options, AbsolutePath? gameFolder = null)
+    {
+        var writeLock = new SemaphoreSlim(1, 1);
+        await Parallel.ForEachAsync(manifest.Files, options, async (file, token) =>
+            {
+                if (file.Size == Size.Zero)
+                    return;
+                if (existingHashes.Contains(file.Hash))
+                    return;
+
+                MultiHash? multiHash = null;
+
+                // Prefer hashing the local copy of the file: it saves downloading the whole patch from Steam.
+                if (gameFolder is { } localRoot)
+                {
+                    var localPath = localRoot / file.Path;
+                    if (localPath.FileExists && localPath.FileInfo.Size == file.Size)
+                    {
+                        await using var localProgress = await renderer.StartProgressTask($"Hashing local {file.Path}", maxValue: file.Size.Value);
+                        await using var localStream = localPath.Read();
+                        await using var localWrapper = new StreamProgressWrapper<ProgressTask>(localStream, state: localProgress, notifyWritten: static (progressTask, values) =>
+                        {
+                            var (current, _) = values;
+                            progressTask.Increment(current.Value);
+                        });
+
+                        var localHash = await MultiHasher.HashStream(localStream, cancellationToken: token);
+                        if (localHash.Sha1.Equals(file.Hash))
+                            multiHash = localHash;
+                        else
+                            await renderer.TextLine("Local copy of {0} doesn't match Steam's manifest, downloading it instead", file.Path);
+                    }
+                }
+
+                if (multiHash is null)
+                {
+                    await using var progressTask = await renderer.StartProgressTask($"Downloading {file.Path}", maxValue: file.Size.Value);
+                    await using var stream = session.GetFileStream(appId, manifest, file.Path);
+                    await using var progressWrapper = new StreamProgressWrapper<ProgressTask>(stream, state: progressTask, notifyWritten: static (progressTask, values) =>
+                    {
+                        var (current, _) = values;
+                        var task = progressTask.Increment(current.Value);
+                    });
+
+                    multiHash = await MultiHasher.HashStream(stream, cancellationToken: token);
+                }
+
+                var fileName = multiHash.XxHash3 + ".json";
+                var path = output / "hashes" / fileName[2..4] / fileName[2..];
+
+                await writeLock.WaitAsync(token);
+                if (!multiHash.Sha1.Equals(file.Hash))
+                    throw new InvalidOperationException("Hash mismatch on downloaded file, expected: " + file.Hash + " got: " + multiHash.Sha1);
+                
+                try
+                {
+                    path.Parent.CreateDirectory();
+                    {
+                        await using var outputStream = path.Create();
+                        await JsonSerializer.SerializeAsync(outputStream, multiHash, indentedOptions,
+                            token
+                        );
+                    }
+                    existingHashes.Add(multiHash.Sha1);
+                }
+                finally
+                {
+                    writeLock.Release();
+                }
+            }
+        );
+    }
+}

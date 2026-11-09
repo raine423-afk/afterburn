@@ -1,0 +1,8 @@
+﻿Ini Configuration File, INI, .ini
+Text File, TXT, .txt
+JSON File, JSON, .json
+XML File, XML, .xml
+Unix Shell Script, SH, .sh
+Windows Batch File, BAT, .bat
+Windows Command File, CMD, .cmd
+OSX Command File, COMMAND, .command
