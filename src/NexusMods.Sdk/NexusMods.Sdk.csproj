@@ -1,0 +1,142 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <!-- NuGet Package Shared Details -->
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('NuGet.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+    <ItemGroup>
+        <PackageReference Include="BitFaster.Caching" />
+        <PackageReference Include="CliWrap" />
+        <PackageReference Include="DynamicData" />
+        <PackageReference Include="MemoryPack" />
+        <PackageReference Include="Microsoft.Extensions.Options" />
+        <PackageReference Include="NexusMods.Hashing.xxHash3" />
+        <PackageReference Include="NexusMods.MnemonicDB.Abstractions" />
+        <PackageReference Include="NexusMods.MnemonicDB.SourceGenerator" PrivateAssets="all" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+        <PackageReference Include="NexusMods.Paths" />
+        <PackageReference Include="OneOf" />
+        <PackageReference Include="Polly.Core" />
+        <PackageReference Include="R3" />
+        <PackageReference Include="TransparentValueObjects" PrivateAssets="all" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+        <PackageReference Include="TransparentValueObjects.Abstractions" />
+    </ItemGroup>
+
+    <PropertyGroup>
+        <BuildDateOutput>$(BaseIntermediateOutputPath)buildDate.txt</BuildDateOutput>
+    </PropertyGroup>
+
+    <Target Name="WriteCurrentDate" BeforeTargets="BeforeBuild">
+        <MakeDir Directories="$(BaseIntermediateOutputPath)" />
+        <Exec Condition="'$(OS)' != 'Windows_NT'" Command="bash -c &quot;date -u +%Y-%m-%dT%H:%M:%SZ &gt; $(BuildDateOutput)&quot;"  />
+        <Exec Condition="'$(OS)' == 'Windows_NT'" Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;Get-Date -Format o | Out-File -FilePath '$(BuildDateOutput)' -Encoding UTF8&quot;" />
+    </Target>
+
+    <Target Name="EmbedOutput" AfterTargets="WriteCurrentDate">
+        <Error Condition="!Exists('$(BuildDateOutput)')" Text="Failed to embed file $(BuildDateOutput)" />
+
+        <ItemGroup>
+            <EmbeddedResource Include="$(BuildDateOutput)" LogicalName="buildDate.txt" />
+        </ItemGroup>
+    </Target>
+
+    <ItemGroup>
+        <Compile Update="ProxyConsole\DelegateParser.cs">
+            <DependentUpon>IOptionParser.cs</DependentUpon>
+        </Compile>
+        <Compile Update="Hashes\Md5Attribute.cs">
+          <DependentUpon>Md5Value.cs</DependentUpon>
+        </Compile>
+        <Compile Update="Hashes\Md5JsonConverter.cs">
+          <DependentUpon>Md5Value.cs</DependentUpon>
+        </Compile>
+        <Compile Update="Hashes\Sha1Attribute.cs">
+          <DependentUpon>Sha1Value.cs</DependentUpon>
+        </Compile>
+        <Compile Update="Hashes\Sha1JsonConverter.cs">
+          <DependentUpon>Sha1Value.cs</DependentUpon>
+        </Compile>
+        <Compile Update="Hashes\Crc32JsonConverter.cs">
+          <DependentUpon>Crc32Value.cs</DependentUpon>
+        </Compile>
+        <Compile Update="Hashes\Crc32Attribute.cs">
+          <DependentUpon>Crc32Value.cs</DependentUpon>
+        </Compile>
+        <Compile Update="EnvironmentVariableNames.cs">
+          <DependentUpon>EnvironmentVariables.cs</DependentUpon>
+        </Compile>
+        <Compile Update="InstallationMethod.cs">
+          <DependentUpon>ApplicationConstants.cs</DependentUpon>
+        </Compile>
+        <Compile Update="UserAgent.cs">
+          <DependentUpon>ApplicationConstants.cs</DependentUpon>
+        </Compile>
+        <Compile Update="Resources\ResourceLoader.cs">
+          <DependentUpon>IResourceLoader.cs</DependentUpon>
+        </Compile>
+        <Compile Update="Resources\ANestedResourceLoader.cs">
+          <DependentUpon>IResourceLoader.cs</DependentUpon>
+        </Compile>
+        <Compile Update="Resources\DB\PersistedDbResource.cs">
+          <DependentUpon>PersistedDbResourceLoader.cs</DependentUpon>
+        </Compile>
+        <Compile Update="IO\EmbededResourceStreamFactory.cs">
+          <DependentUpon>IStreamFactory.cs</DependentUpon>
+        </Compile>
+        <Compile Update="IO\NativeFileStreamFactory.cs">
+          <DependentUpon>IStreamFactory.cs</DependentUpon>
+        </Compile>
+        <Compile Update="IO\MemoryStreamFactory.cs">
+          <DependentUpon>IStreamFactory.cs</DependentUpon>
+        </Compile>
+        <Compile Update="IO\IChunkedStreamSource.cs">
+          <DependentUpon>ChunkedStream.cs</DependentUpon>
+        </Compile>
+        <Compile Update="Settings\BooleanContainerOptions.cs">
+          <DependentUpon>IContainerOptions.cs</DependentUpon>
+        </Compile>
+        <Compile Update="Settings\SingleValueMultipleChoiceContainerOptions.cs">
+          <DependentUpon>IContainerOptions.cs</DependentUpon>
+        </Compile>
+        <Compile Update="Settings\ConfigurablePathsContainerOption.cs">
+          <DependentUpon>IContainerOptions.cs</DependentUpon>
+        </Compile>
+        <Compile Update="RuntimeDependency\ExecutableRuntimeDependency.cs">
+          <DependentUpon>IRuntimeDependency.cs</DependentUpon>
+        </Compile>
+        <Compile Update="RuntimeDependency\AggregateExecutableRuntimeDependency.cs">
+          <DependentUpon>IRuntimeDependency.cs</DependentUpon>
+        </Compile>
+        <Compile Update="FileExtractor\Signatures.cs">
+          <AutoGen>True</AutoGen>
+          <DesignTime>True</DesignTime>
+          <DependentUpon>Signatures.tt</DependentUpon>
+        </Compile>
+        <Compile Update="Hashes\IStreamingHasher.cs">
+          <DependentUpon>IHasher.cs</DependentUpon>
+        </Compile>
+        <Compile Update="WineDllOverride.cs">
+          <DependentUpon>WineParser.cs</DependentUpon>
+        </Compile>
+        <Compile Update="WineDllOverrideType.cs">
+          <DependentUpon>WineParser.cs</DependentUpon>
+        </Compile>
+        <Compile Update="Games\Locators\GameLocatorResult.cs">
+          <DependentUpon>IGameLocator.cs</DependentUpon>
+        </Compile>
+        <Compile Update="Games\Locators\GameLocationDescriptor.cs">
+          <DependentUpon>GameLocations.cs</DependentUpon>
+        </Compile>
+        <Compile Update="Games\Locators\ILinuxCompatabilityDataProvider.cs">
+          <DependentUpon>GameLocatorResult.cs</DependentUpon>
+        </Compile>
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="FileExtractor\Signatures.tt">
+        <Generator>TextTemplatingFileGenerator</Generator>
+        <LastGenOutput>Signatures.cs</LastGenOutput>
+      </None>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Models\Library\" />
+    </ItemGroup>
+
+</Project>

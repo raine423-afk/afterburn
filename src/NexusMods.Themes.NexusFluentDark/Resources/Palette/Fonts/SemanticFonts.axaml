@@ -1,0 +1,21 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Include the Primitive fonts -->
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="/Resources/Palette/Fonts/PrimitiveFonts.axaml" />
+    </ResourceDictionary.MergedDictionaries>
+
+
+    <StaticResource x:Key="FontHeadlinesRegular" ResourceKey="ChakraPetchRegular"/>
+    <StaticResource x:Key="FontHeadlinesSemiBold" ResourceKey="ChakraPetchSemi"/>
+    <StaticResource x:Key="FontHeadlinesBold" ResourceKey="ChakraPetchSemi"/>
+
+    <StaticResource x:Key="FontBodyRegular" ResourceKey="InterRegular"/>
+    <StaticResource x:Key="FontBodyMedium" ResourceKey="InterMedium"/>
+    <StaticResource x:Key="FontBodySemi" ResourceKey="InterSemi"/>
+    
+    <StaticResource x:Key="FontBodyCode" ResourceKey="RobotoMonoRegular"/>
+
+</ResourceDictionary>
+

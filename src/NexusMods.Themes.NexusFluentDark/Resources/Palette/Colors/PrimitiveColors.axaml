@@ -1,0 +1,175 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    
+    
+    
+    <!--
+        Color Primitives (Layer 1):
+        These base colours define the building blocks of our colour system.
+        They will not be used directly in Themes or Styles as their descriptive names make them difficult to change in the future.
+        They will instead be accessed from Layer 2 (Brand Palette) where their names are aliased.
+    -->
+
+
+    <!-- Zinc -->
+    <Color x:Key="PrimitiveZinc950">#0F0F10</Color>
+    <Color x:Key="PrimitiveZinc900">#1D1D21</Color>
+    <Color x:Key="PrimitiveZinc800">#29292E</Color>
+    <Color x:Key="PrimitiveZinc700">#3E3E47</Color>
+    <Color x:Key="PrimitiveZinc600">#52525B</Color>
+    <Color x:Key="PrimitiveZinc500">#71717A</Color>
+    <Color x:Key="PrimitiveZinc400">#A1A1AA</Color>
+    <Color x:Key="PrimitiveZinc300">#D4D4D8</Color>
+    <Color x:Key="PrimitiveZinc200">#E4E4E7</Color>
+    <Color x:Key="PrimitiveZinc100">#F4F4F5</Color>
+    <Color x:Key="PrimitiveZinc50">#FAFAFA</Color>
+
+    <!-- Red -->
+    <Color x:Key="PrimitiveRed950">#450A0A</Color>
+    <Color x:Key="PrimitiveRed900">#7F1D1D</Color>
+    <Color x:Key="PrimitiveRed800">#991B1B</Color>
+    <Color x:Key="PrimitiveRed700">#B91C1C</Color>
+    <Color x:Key="PrimitiveRed600">#DC2626</Color>
+    <Color x:Key="PrimitiveRed500">#EF4444</Color>
+    <Color x:Key="PrimitiveRed400">#F87171</Color>
+    <Color x:Key="PrimitiveRed300">#FCA5A5</Color>
+    <Color x:Key="PrimitiveRed200">#FECACA</Color>
+    <Color x:Key="PrimitiveRed100">#FEE2E2</Color>
+    <Color x:Key="PrimitiveRed50">#FEF2F2</Color>
+
+    <!-- Orange -->
+    <Color x:Key="PrimitiveOrange950">#431407</Color>
+    <Color x:Key="PrimitiveOrange900">#7C2D12</Color>
+    <Color x:Key="PrimitiveOrange800">#9A3412</Color>
+    <Color x:Key="PrimitiveOrange700">#C2410C</Color>
+    <Color x:Key="PrimitiveOrange600">#EA580C</Color>
+    <Color x:Key="PrimitiveOrange500">#F97316</Color>
+    <Color x:Key="PrimitiveOrange400">#FB923C</Color>
+    <Color x:Key="PrimitiveOrange300">#FDBA74</Color>
+    <Color x:Key="PrimitiveOrange200">#FED7AA</Color>
+    <Color x:Key="PrimitiveOrange100">#FFEDD5</Color>
+    <Color x:Key="PrimitiveOrange50">#FFF7ED</Color>
+
+    <!-- Yellow -->
+    <Color x:Key="PrimitiveYellow950">#422006</Color>
+    <Color x:Key="PrimitiveYellow900">#713F12</Color>
+    <Color x:Key="PrimitiveYellow800">#854D0E</Color>
+    <Color x:Key="PrimitiveYellow700">#A16207</Color>
+    <Color x:Key="PrimitiveYellow600">#CA8A04</Color>
+    <Color x:Key="PrimitiveYellow500">#EAB308</Color>
+    <Color x:Key="PrimitiveYellow400">#FACC15</Color>
+    <Color x:Key="PrimitiveYellow300">#FDE047</Color>
+    <Color x:Key="PrimitiveYellow200">#FEF08A</Color>
+    <Color x:Key="PrimitiveYellow100">#FEF9C3</Color>
+    <Color x:Key="PrimitiveYellow50">#FEFCE8</Color>
+
+    <!-- Green -->
+    <Color x:Key="PrimitiveGreen950">#052E16</Color>
+    <Color x:Key="PrimitiveGreen900">#14532D</Color>
+    <Color x:Key="PrimitiveGreen800">#166534</Color>
+    <Color x:Key="PrimitiveGreen700">#15803D</Color>
+    <Color x:Key="PrimitiveGreen600">#16A34A</Color>
+    <Color x:Key="PrimitiveGreen500">#22C55E</Color>
+    <Color x:Key="PrimitiveGreen400">#4ADE80</Color>
+    <Color x:Key="PrimitiveGreen300">#86EFAC</Color>
+    <Color x:Key="PrimitiveGreen200">#BBF7D0</Color>
+    <Color x:Key="PrimitiveGreen100">#DCFCE7</Color>
+    <Color x:Key="PrimitiveGreen50">#F0FDF4</Color>
+    
+    <!-- Teal -->
+    <Color x:Key="PrimitiveTeal950">#042F2E</Color>
+    <Color x:Key="PrimitiveTeal900">#134E4A</Color>
+    <Color x:Key="PrimitiveTeal800">#115E59</Color>
+    <Color x:Key="PrimitiveTeal700">#0F766E</Color>
+    <Color x:Key="PrimitiveTeal600">#0D9488</Color>
+    <Color x:Key="PrimitiveTeal500">#14B8A6</Color>
+    <Color x:Key="PrimitiveTeal400">#2DD4BF</Color>
+    <Color x:Key="PrimitiveTeal300">#5EEAD4</Color>
+    <Color x:Key="PrimitiveTeal200">#99F6E4</Color>
+    <Color x:Key="PrimitiveTeal100">#CCFBF1</Color>
+    <Color x:Key="PrimitiveTeal50">#F0FDFA</Color>
+    
+    <!-- Blue -->
+    <Color x:Key="PrimitiveBlue950">#172554</Color>
+    <Color x:Key="PrimitiveBlue900">#1E3A8A</Color>
+    <Color x:Key="PrimitiveBlue800">#1E40AF</Color>
+    <Color x:Key="PrimitiveBlue700">#1D4ED8</Color>
+    <Color x:Key="PrimitiveBlue600">#2563EB</Color>
+    <Color x:Key="PrimitiveBlue500">#3B82F6</Color>
+    <Color x:Key="PrimitiveBlue400">#60A5FA</Color>
+    <Color x:Key="PrimitiveBlue300">#93C5FD</Color>
+    <Color x:Key="PrimitiveBlue200">#BFDBFE</Color>
+    <Color x:Key="PrimitiveBlue100">#DBEAFE</Color>
+    <Color x:Key="PrimitiveBlue50">#EFF6FF</Color>
+    
+    <!-- Violet -->
+    <Color x:Key="PrimitiveViolet950">#2E1065</Color>
+    <Color x:Key="PrimitiveViolet900">#4C1D95</Color>
+    <Color x:Key="PrimitiveViolet800">#5B21B6</Color>
+    <Color x:Key="PrimitiveViolet700">#6D28D9</Color>
+    <Color x:Key="PrimitiveViolet600">#7C3AED</Color>
+    <Color x:Key="PrimitiveViolet500">#8B5CF6</Color>
+    <Color x:Key="PrimitiveViolet400">#A78BFA</Color>
+    <Color x:Key="PrimitiveViolet300">#C4B5FD</Color>
+    <Color x:Key="PrimitiveViolet200">#DDD6FE</Color>
+    <Color x:Key="PrimitiveViolet100">#EDE9FE</Color>
+    <Color x:Key="PrimitiveViolet50">#F5F3FF</Color>
+
+    
+    <!-- TranslucentWhite -->
+    <!-- NOTE: Avalonia uses ARGB, while Figma uses RGBA -->
+    <Color x:Key="PrimitiveTranslucentWhite950">#F2FFFFFF</Color>
+    <Color x:Key="PrimitiveTranslucentWhite900">#E5FFFFFF</Color>
+    <Color x:Key="PrimitiveTranslucentWhite800">#CCFFFFFF</Color>
+    <Color x:Key="PrimitiveTranslucentWhite700">#B2FFFFFF</Color>
+    <Color x:Key="PrimitiveTranslucentWhite600">#99FFFFFF</Color>
+    <Color x:Key="PrimitiveTranslucentWhite500">#80FFFFFF</Color>
+    <Color x:Key="PrimitiveTranslucentWhite400">#66FFFFFF</Color>
+    <Color x:Key="PrimitiveTranslucentWhite300">#4DFFFFFF</Color>
+    <Color x:Key="PrimitiveTranslucentWhite200">#33FFFFFF</Color>
+    <Color x:Key="PrimitiveTranslucentWhite100">#1AFFFFFF</Color>
+    <Color x:Key="PrimitiveTranslucentWhite50">#0DFFFFFF</Color>
+
+    <!-- TranslucentBlack -->
+    <!-- NOTE: Avalonia uses ARGB, while Figma uses RGBA -->
+    <Color x:Key="PrimitiveTranslucentBlack950">#F2000000</Color>
+    <Color x:Key="PrimitiveTranslucentBlack900">#E5000000</Color>
+    <Color x:Key="PrimitiveTranslucentBlack800">#CC000000</Color>
+    <Color x:Key="PrimitiveTranslucentBlack700">#B2000000</Color>
+    <Color x:Key="PrimitiveTranslucentBlack600">#99000000</Color>
+    <Color x:Key="PrimitiveTranslucentBlack500">#80000000</Color>
+    <Color x:Key="PrimitiveTranslucentBlack400">#66000000</Color>
+    <Color x:Key="PrimitiveTranslucentBlack300">#4D000000</Color>
+    <Color x:Key="PrimitiveTranslucentBlack200">#33000000</Color>
+    <Color x:Key="PrimitiveTranslucentBlack100">#1A000000</Color>
+    <Color x:Key="PrimitiveTranslucentBlack50">#0D000000</Color>
+    
+    <!-- Pure -->
+    <Color x:Key="PrimitivePureWhite">#FFFFFF</Color>
+    <Color x:Key="PrimitivePureBlack">#000000</Color>
+
+
+    <!-- Afterburn palette: blue-violet "Midnight" neutrals and neon "Cyan" primary -->
+    <Color x:Key="PrimitiveMidnight950">#0A0C16</Color>
+    <Color x:Key="PrimitiveMidnight900">#11142A</Color>
+    <Color x:Key="PrimitiveMidnight800">#1A1E3A</Color>
+    <Color x:Key="PrimitiveMidnight700">#262B4F</Color>
+    <Color x:Key="PrimitiveMidnight600">#383E67</Color>
+    <Color x:Key="PrimitiveMidnight500">#555C87</Color>
+    <Color x:Key="PrimitiveMidnight400">#7A82AC</Color>
+    <Color x:Key="PrimitiveMidnight300">#A5ACCF</Color>
+    <Color x:Key="PrimitiveMidnight200">#CACFE8</Color>
+    <Color x:Key="PrimitiveMidnight100">#E3E6F5</Color>
+    <Color x:Key="PrimitiveMidnight50">#F3F4FB</Color>
+    <Color x:Key="PrimitiveCyan950">#032F36</Color>
+    <Color x:Key="PrimitiveCyan900">#0B4A57</Color>
+    <Color x:Key="PrimitiveCyan800">#0C5E6E</Color>
+    <Color x:Key="PrimitiveCyan700">#0B7688</Color>
+    <Color x:Key="PrimitiveCyan600">#0894AA</Color>
+    <Color x:Key="PrimitiveCyan500">#06B8D0</Color>
+    <Color x:Key="PrimitiveCyan400">#22D8EE</Color>
+    <Color x:Key="PrimitiveCyan300">#67E9F9</Color>
+    <Color x:Key="PrimitiveCyan200">#A5F3FC</Color>
+    <Color x:Key="PrimitiveCyan100">#CFFAFE</Color>
+    <Color x:Key="PrimitiveCyan50">#ECFEFF</Color>
+</ResourceDictionary>

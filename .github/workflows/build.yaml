@@ -1,0 +1,25 @@
+name: Build Afterburn
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Publish
+        run: dotnet publish src/NexusMods.App/NexusMods.App.csproj -c Release -r win-x64 --self-contained false -o publish
+      - name: Add license files to the build
+        shell: pwsh
+        run: Copy-Item LICENSE.md, NOTICE.md, THIRD-PARTY-NOTICES.md, README.md publish/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Afterburn-win-x64
+          path: publish/
