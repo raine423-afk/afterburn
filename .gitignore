@@ -42,3 +42,6 @@ coverage.json
 
 # python virtual environment
 .venv
+
+# Afterburn installer output
+installer-out/
