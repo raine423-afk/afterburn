@@ -134,9 +134,14 @@ public class RunGameTool<T> : IRunGameTool
     {
         var command = new Command(program.ToString())
             .WithArguments(arguments)
-            .WithWorkingDirectory(program.Parent.ToString());
+            .WithWorkingDirectory(program.Parent.ToString())
+            // Afterburn: a game closing with an error code (for example when a mod tells it to quit) isn't an app
+            // error, so don't show a crash dialog; log it instead.
+            .WithValidation(CommandResultValidation.None);
 
         var result = await _processRunner.RunAsync(command, cancellationToken: cancellationToken);
+        if (result.ExitCode != 0)
+            _logger.LogWarning("{Program} exited with code {ExitCode}. If the game didn't start, check its mod logs (for example red4ext/logs and r6/logs)", program.FileName, result.ExitCode);
         return result;
     }
 
