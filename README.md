@@ -31,16 +31,26 @@ Afterburn is in **testing**. Under the Nexus Mods [API Acceptable Use Policy](ht
 Requires Git and the .NET 9 SDK.
 
 ```powershell
-git clone https://github.com/raine423-afk/Afterburn.git
-cd Afterburn
+git clone https://github.com/raine423-afk/afterburn.git
+cd afterburn
 dotnet publish src/NexusMods.App/NexusMods.App.csproj -c Release -r win-x64 --self-contained false -o publish
 ```
 
 Run `publish/NexusMods.App.exe`. Internal project names still use the `NexusMods.*` prefix inherited from upstream. They're code identifiers, not branding.
 
-## Getting the source
+## Download and install
 
-The complete source code for every Afterburn release is in this repository, as the GPL requires. Each release on the Releases page is built from the commit it's tagged with.
+Windows installers are attached to each release on the [Releases page](https://github.com/raine423-afk/afterburn/releases) as `Afterburn-Setup-<version>.exe`. The installer bundles everything Afterburn needs, including the .NET runtime, and shows the GPL-3.0 license before installing. It isn't code-signed yet, so Windows may show a "Windows protected your PC" warning: choose **More info → Run anyway**.
+
+## Source code for every release (GPL-3.0 section 6)
+
+The installer and the files it installs are object code built from this repository. The complete Corresponding Source for each release is available here, at no charge, from the same place as the download:
+
+- each release is built from the commit its tag points to (for example tag `v1.0.0`), and the release page links the source code for that exact commit as `.zip` and `.tar.gz`;
+- the build steps, including the installer script (`installer/afterburn.iss`) and the build workflow (`.github/workflows/build.yaml`), are part of this repository;
+- the game-hashes database bundled with the app (`data/game_hashes_db.zip`) is included in the repository.
+
+Development builds produced by GitHub Actions are for testing; their source is the commit shown on the build page.
 
 ## License
 

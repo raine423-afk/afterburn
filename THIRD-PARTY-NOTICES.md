@@ -1,6 +1,14 @@
 # Third-party notices
 
-Afterburn includes the following third-party components in addition to NuGet packages, whose licenses come with each package.
+Afterburn includes the following third-party components. Release builds also include `THIRD-PARTY-PACKAGES.md`, generated at build time, which lists every NuGet package bundled with the app together with its license.
+
+## .NET runtime
+- Included in self-contained builds and the installer (the `System.*` and `Microsoft.*` runtime files, `coreclr.dll`, `hostfxr.dll` and related files).
+- Copyright (c) .NET Foundation and Contributors. License: MIT (text below). Microsoft's own third-party notices for the runtime: https://github.com/dotnet/runtime/blob/main/THIRD-PARTY-NOTICES.TXT
+
+## Inno Setup
+- Used to build the Windows installer; the installer contains Inno Setup's setup program.
+- Copyright (C) 1997-2026 Jordan Russell, Portions Copyright (C) 2000-2026 Martijn Laan. Inno Setup license: https://jrsoftware.org/files/is/license.txt
 
 ## Inter font
 - Files: `src/NexusMods.Themes.NexusFluentDark/Assets/Fonts/*/Inter-*.ttf`
@@ -309,3 +317,31 @@ DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 ```
+
+---
+
+### .NET runtime: MIT license text
+
+The MIT License (MIT)
+
+Copyright (c) .NET Foundation and Contributors
+
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

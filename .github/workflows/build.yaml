@@ -3,8 +3,12 @@ name: Build Afterburn
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-windows:
@@ -15,17 +19,24 @@ jobs:
         with:
           dotnet-version: '9.x'
       - name: Publish (self-contained, so users don't need to install .NET)
-        run: dotnet publish src/NexusMods.App/NexusMods.App.csproj -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -o publish
+        run: dotnet publish src/NexusMods.App/NexusMods.App.csproj -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -o publish -nologo "-clp:ErrorsOnly"
       - name: Add license files to the build
         shell: pwsh
         run: Copy-Item LICENSE.md, NOTICE.md, THIRD-PARTY-NOTICES.md, README.md publish/
+      - name: List bundled NuGet packages and their licenses
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          dotnet tool install --global nuget-license
+          nuget-license -i src/NexusMods.App/NexusMods.App.csproj -o Markdown -fo publish/THIRD-PARTY-PACKAGES.md
       - name: Build the installer
         shell: pwsh
         run: |
           if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) { choco install innosetup -y --no-progress }
           $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
           if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
-          & $iscc installer/afterburn.iss /DAppVersion=1.0.0
+          $ver = if ('${{ github.ref_type }}' -eq 'tag') { '${{ github.ref_name }}'.TrimStart('v') } else { '1.0.0' }
+          & $iscc installer/afterburn.iss /DAppVersion=$ver
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
@@ -35,3 +46,11 @@ jobs:
         with:
           name: Afterburn-Setup
           path: installer-out/*.exe
+      - name: Publish the release (tags only)
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer-out/*.exe
+          body: |
+            Windows installer for Afterburn ${{ github.ref_name }}.
+            Complete source code for this release: the "Source code" archives below, or this repository at tag ${{ github.ref_name }}. Licensed under GPL-3.0; see LICENSE.md, NOTICE.md and THIRD-PARTY-NOTICES.md.

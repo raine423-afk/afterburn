@@ -38,3 +38,9 @@ All changes made 2026-11-09 unless noted.
 - **Temporary Unpack Location** setting (`Sdk/FileExtractor/IFileExtractorSettings.cs`).
 - **Rate Meter:** API rate-limit tracking and bottom-bar display (`Networking.NexusWebApi/NexusApiRateLimitTracker.cs`, `NexusApiClient.cs`, `Services.cs`, `App.UI/Controls/DevelopmentBuildBanner/*`).
 - **Windows startup crash fixed:** registers the Windows registry service needed by the Steam, GOG and Epic game locators (`Backend/ServiceExtensions.cs`).
+- **Windows installer:** added an Inno Setup installer (`installer/afterburn.iss`) built by the GitHub workflow. Builds are now self-contained (they include the .NET runtime) and precompiled (ReadyToRun) for faster startup (`.github/workflows/build.yaml`).
+- **Lower memory and CPU use:** .NET garbage-collector and runtime settings tuned (`src/NexusMods.App/runtimeconfig.template.json`).
+- **Cyberpunk 2077 2.5 detection built in:** the game-hashes database with 2.5 is kept in the repository (`data/game_hashes_db.zip`) and embedded at build time instead of downloading the older one (`NexusMods.Games.FileHashes.csproj`). If the embedded database is newer than the one on disk, Afterburn now adds and uses it (`FileHashesService.cs`).
+- **Faster library processing:** mods are compressed with Zstandard level 3 instead of 16/9 when added to the library (`NxFileStore.cs`).
+- **Release compliance:** README sections on downloads and where to get the source for each release; tagged releases publish the installer next to the source (`build.yaml`); licenses for bundled third-party components are included with the app (`THIRD-PARTY-NOTICES.md`).
+- **Security update:** OpenTelemetry packages updated from 1.12.0 to 1.15.3 to fix GHSA-4625-4j76-fww9 (`Directory.Packages.props`). Telemetry stays disabled.

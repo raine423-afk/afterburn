@@ -12,6 +12,9 @@ AppName=Afterburn
 AppVersion={#AppVersion}
 AppVerName=Afterburn {#AppVersion}
 AppPublisher=Afterburn contributors
+AppCopyright=Copyright (C) Nexus Mods and NexusMods.App contributors; modifications (C) 2026 Afterburn contributors. GPL-3.0.
+VersionInfoVersion={#AppVersion}
+VersionInfoDescription=Afterburn installer
 AppPublisherURL=https://github.com/raine423-afk/afterburn
 AppSupportURL=https://github.com/raine423-afk/afterburn/issues
 DefaultDirName={localappdata}\Afterburn
@@ -39,6 +42,7 @@ Source: "..\LICENSE.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\NOTICE.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\publish\THIRD-PARTY-PACKAGES.md"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
 Name: "{group}\Afterburn"; Filename: "{app}\NexusMods.App.exe"
