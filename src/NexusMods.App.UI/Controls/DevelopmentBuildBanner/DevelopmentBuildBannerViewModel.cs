@@ -53,25 +53,48 @@ public class DevelopmentBuildBannerViewModel : AViewModel<IDevelopmentBuildBanne
 
         // Afterburn: pause/resume all downloads from the bottom bar. While paused, downloads that start later
         // (for example the next files of a collection) are paused too, every couple of seconds.
-        ToggleDownloadsPausedCommand = ReactiveCommand.Create(() =>
-        {
-            DownloadsPaused = !DownloadsPaused;
-            if (DownloadsPaused) downloadsService.PauseAll();
-            else downloadsService.ResumeAll();
-        });
+        // The timer only runs while downloads are paused, so an idle Afterburn doesn't wake up every 2 seconds.
         _pauseTimer = new System.Threading.Timer(_ =>
         {
             if (!DownloadsPaused) return;
             try { downloadsService.PauseAll(); } catch { /* best effort */ }
-        }, null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+        }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+
+        ToggleDownloadsPausedCommand = ReactiveCommand.Create(() =>
+        {
+            DownloadsPaused = !DownloadsPaused;
+            if (DownloadsPaused)
+            {
+                downloadsService.PauseAll();
+                _pauseTimer.Change(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+            }
+            else
+            {
+                _pauseTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                downloadsService.ResumeAll();
+            }
+        });
 
         Apply(rateLimitTracker.Current);
 
         // The bottom bar lives as long as the main window, so subscribe for the view model's lifetime.
-        rateLimitTracker.Changed += snapshot => Dispatcher.UIThread.Post(() => Apply(snapshot));
+        // Afterburn: during a big collection there can be hundreds of API calls a minute; update the bar at most
+        // twice a second instead of once per call.
+        rateLimitTracker.Changed += snapshot =>
+        {
+            _latestSnapshot = snapshot;
+            if (Interlocked.Exchange(ref _updateQueued, 1) == 1) return;
+            _ = Task.Delay(TimeSpan.FromMilliseconds(500)).ContinueWith(_ => Dispatcher.UIThread.Post(() =>
+            {
+                Interlocked.Exchange(ref _updateQueued, 0);
+                if (_latestSnapshot is { } latest) Apply(latest);
+            }), TaskScheduler.Default);
+        };
     }
 
     private readonly System.Threading.Timer _pauseTimer;
+    private NexusApiRateLimitSnapshot? _latestSnapshot;
+    private int _updateQueued;
 
     private void Apply(NexusApiRateLimitSnapshot s)
     {

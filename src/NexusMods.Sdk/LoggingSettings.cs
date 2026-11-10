@@ -43,7 +43,7 @@ public record LoggingSettings : ISettings
     /// <summary>
     /// Gets the minimum logging level.
     /// </summary>
-    public LogLevel MinimumLevel { get; [UsedImplicitly] set; } = LogLevel.Debug;
+    public LogLevel MinimumLevel { get; [UsedImplicitly] set; } = LogLevel.Information;
 
     /// <summary>
     /// When enabled, logs will be written to the console as well as the log file.
@@ -72,7 +72,7 @@ public record LoggingSettings : ISettings
                 {
                     Section = Sections.General,
                     DisplayName = "Minimum logging level",
-                    DescriptionFactory = _ => "Sets the minimum logging level. Recommended: Debug",
+                    DescriptionFactory = _ => "Sets the minimum logging level. Recommended: Information (use Debug only when troubleshooting)",
                     RequiresRestart = true,
                 },
                 SingleValueMultipleChoiceContainerOptions.Create(

@@ -94,6 +94,9 @@ public class RunGameTool<T> : IRunGameTool
         // notice that SkyrimSE.exe is running and wait for that to exit.
 
         var existing = FindMatchingProcesses(names).Select(p => p.Id).ToHashSet();
+
+        // Afterburn: the game would inherit a lowered priority from a collection install running in the background.
+        BackgroundWorkPriority.RestoreNormal();
             
         if (UseShell)
         {

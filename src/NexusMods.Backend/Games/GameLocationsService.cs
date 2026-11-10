@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
+using System.IO.Enumeration;
 using System.IO.Hashing;
 using DynamicData.Kernel;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,14 +36,17 @@ internal class GameLocationsService : IGameLocationsService
         CancellationToken outerToken = default)
     {
         var topLevelLocations = installation.Locations.GetTopLevelLocations();
-        var enumerable = topLevelLocations.Where(kv => kv.Value.DirectoryExists()).SelectMany(kv => kv.Value.EnumerateFiles()).ToAsyncEnumerable();
+        // Afterburn: take each file's size and timestamp from the directory listing itself instead of asking the disk
+        // again for every file, which roughly halves the work of checking a large modded game folder.
+        var enumerable = topLevelLocations.Where(kv => kv.Value.DirectoryExists()).SelectMany(kv => EnumerateWithMetadata(kv.Value)).ToAsyncEnumerable();
 
         var seenPaths = new ConcurrentDictionary<GamePath, bool>();
         var newFiles = new ConcurrentDictionary<GamePath, IndexFileResult>();
         var modifiedFiles = new ConcurrentDictionary<GamePath, IndexFileResult>();
 
-        await Parallel.ForEachAsync(enumerable, cancellationToken: outerToken, async (file, token) =>
+        await Parallel.ForEachAsync(enumerable, cancellationToken: outerToken, async (scanned, token) =>
         {
+            var file = scanned.Path;
             try
             {
                 var gamePath = installation.Locations.ToGamePath(file);
@@ -51,7 +55,10 @@ internal class GameLocationsService : IGameLocationsService
 
                 if (previousDiskState.TryGetValue(gamePath, out var previousDiskStateEntry))
                 {
-                    if (HasFileChanged(file, previousDiskStateEntry))
+                    var changed = scanned.HasMetadata
+                        ? scanned.LastWriteUtc != previousDiskStateEntry.LastModified || scanned.Size != previousDiskStateEntry.Size
+                        : HasFileChanged(file, previousDiskStateEntry);
+                    if (changed)
                     {
                         var indexFileResult = await IndexFile(file, gamePath, token);
                         modifiedFiles[gamePath] = indexFileResult;
@@ -77,6 +84,39 @@ internal class GameLocationsService : IGameLocationsService
         );
 
         return result;
+    }
+
+    private readonly record struct ScannedFile(AbsolutePath Path, Size Size, DateTimeOffset LastWriteUtc, bool HasMetadata);
+
+    private static IEnumerable<ScannedFile> EnumerateWithMetadata(AbsolutePath root)
+    {
+        // Only the real disk can be listed this way; anything else (for example test file systems) uses the old path.
+        if (root.FileSystem is not FileSystem)
+        {
+            foreach (var file in root.EnumerateFiles())
+                yield return new ScannedFile(file, Size.Zero, default, HasMetadata: false);
+            yield break;
+        }
+
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = 0,
+            ReturnSpecialDirectories = false,
+        };
+
+        var entries = new FileSystemEnumerable<(string Path, long Size, DateTimeOffset Modified)>(
+            root.ToString(),
+            static (ref FileSystemEntry entry) => (entry.ToFullPath(), entry.Length, entry.LastWriteTimeUtc),
+            options)
+        {
+            ShouldIncludePredicate = static (ref FileSystemEntry entry) => !entry.IsDirectory,
+        };
+
+        var fileSystem = root.FileSystem;
+        foreach (var (path, size, modified) in entries)
+            yield return new ScannedFile(fileSystem.FromUnsanitizedFullPath(path), Size.FromLong(size), modified, HasMetadata: true);
     }
 
     private static bool HasFileChanged(AbsolutePath file, DiskStateEntry.ReadOnly previousState)

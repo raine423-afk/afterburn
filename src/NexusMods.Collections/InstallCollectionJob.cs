@@ -14,6 +14,7 @@ using NexusMods.Abstractions.NexusModsLibrary.Models;
 using NexusMods.MnemonicDB.Abstractions;
 using NexusMods.MnemonicDB.Abstractions.ElementComparers;
 using NexusMods.Networking.NexusWebApi;
+using NexusMods.Sdk;
 using NexusMods.Sdk.FileStore;
 using NexusMods.Sdk.Games;
 using NexusMods.Sdk.Jobs;
@@ -145,6 +146,8 @@ public class InstallCollectionJob : IJobDefinitionWithStart<InstallCollectionJob
         var game = (loadout.InstallationInstance.Game as IGame)!;
         var fallbackInstaller = FallbackCollectionDownloadInstaller.Create(ServiceProvider, loadout, game);
 
+        // Afterburn: install at below-normal priority so the game and desktop stay smooth meanwhile.
+        using var lowPriority = BackgroundWorkPriority.Enter();
         await Parallel.ForEachAsync(modsAndDownloads, context.CancellationToken, async (modAndDownload, _) =>
         {
             try
