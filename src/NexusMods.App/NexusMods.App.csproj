@@ -4,6 +4,12 @@
         <OutputType>WinExe</OutputType>
         <ApplicationIcon>icon.ico</ApplicationIcon>
         <ApplicationManifest>app.manifest</ApplicationManifest>
+        <!-- Afterburn: the name Windows shows for the app (Task Manager, file properties). -->
+        <AssemblyTitle>Afterburn</AssemblyTitle>
+        <Product>Afterburn</Product>
+        <Company>Afterburn contributors</Company>
+        <Description>Afterburn mod manager for Cyberpunk 2077 (community fork of the Nexus Mods app)</Description>
+        <Copyright>Copyright (C) Nexus Mods and NexusMods.App contributors; modifications (C) 2026 Afterburn contributors. GPL-3.0.</Copyright>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
