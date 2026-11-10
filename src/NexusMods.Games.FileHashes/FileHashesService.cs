@@ -153,6 +153,16 @@ internal sealed class FileHashesService : IFileHashesService, IDisposable, IHost
         using var _ = await _lock.LockAsync();
 
         var existingDatabases = ExistingDBs().ToArray();
+
+        // Afterburn: the database embedded in this build can be newer than one already on disk
+        // (for example an older database left by the Nexus Mods app). Add it so newer game versions are recognised.
+        if (!ApplicationConstants.IsDebug && existingDatabases.Length > 0 && existingDatabases[0].CreationTime < ApplicationConstants.BuildDate)
+        {
+            _logger.LogInformation("Embedded game hashes database is newer than the one on disk, adding it");
+            var embeddedDatabase = await AddEmbeddedDatabase(cancellationToken: cancellationToken);
+            if (embeddedDatabase.HasValue) existingDatabases = ExistingDBs().ToArray();
+        }
+
         var shouldCheckForUpdate = forceUpdate || existingDatabases.Length == 0 || ShouldCheckForUpdate();
 
         if (!shouldCheckForUpdate && existingDatabases.TryGetFirst(out var latestDatabase))

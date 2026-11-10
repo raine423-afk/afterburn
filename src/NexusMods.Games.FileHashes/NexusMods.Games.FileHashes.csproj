@@ -24,6 +24,16 @@
         <HashesDatabaseOutput>$(BaseIntermediateOutputPath)games_hashes_db.zip</HashesDatabaseOutput>
     </PropertyGroup>
 
+    <!-- Afterburn: use the game hashes database kept in the repository (data/game_hashes_db.zip) when present.
+         It includes game versions newer than the last database published by Nexus Mods. -->
+    <PropertyGroup>
+        <AfterburnHashesDatabase>$(MSBuildThisFileDirectory)..\..\data\game_hashes_db.zip</AfterburnHashesDatabase>
+    </PropertyGroup>
+    <Target Name="UseAfterburnHashesDatabase" BeforeTargets="DownloadHashesDatabase" Condition="Exists('$(AfterburnHashesDatabase)')">
+        <MakeDir Directories="$(BaseIntermediateOutputPath)" />
+        <Copy SourceFiles="$(AfterburnHashesDatabase)" DestinationFiles="$(HashesDatabaseOutput)" SkipUnchangedFiles="true" />
+    </Target>
+
     <!-- NOTE(erri120): Downloading the games hashes database at build time if it doesn't exist -->
     <Target Name="DownloadHashesDatabase" BeforeTargets="BeforeBuild" Condition="!Exists('$(HashesDatabaseOutput)')">
         <MakeDir Directories="$(BaseIntermediateOutputPath)" />
