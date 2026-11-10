@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reactive;
 using Avalonia.Threading;
+using NexusMods.Abstractions.Downloads;
 using NexusMods.Networking.NexusWebApi;
 using NexusMods.Sdk;
 using NexusMods.UI.Sdk;
@@ -13,6 +14,17 @@ public class DevelopmentBuildBannerViewModel : AViewModel<IDevelopmentBuildBanne
     private static readonly Uri GiveFeedbackUri = AfterburnBrand.IssuesUri;
 
     public ReactiveCommand<Unit, Unit> GiveFeedbackCommand { get; }
+
+    /// <inheritdoc />
+    public ReactiveCommand<Unit, Unit> ToggleDownloadsPausedCommand { get; }
+
+    private bool _downloadsPaused;
+    /// <inheritdoc />
+    public bool DownloadsPaused
+    {
+        get => _downloadsPaused;
+        private set => this.RaiseAndSetIfChanged(ref _downloadsPaused, value);
+    }
 
     private string _rateLimitText = "Rate Meter: no calls yet";
     public string RateLimitText
@@ -35,9 +47,23 @@ public class DevelopmentBuildBannerViewModel : AViewModel<IDevelopmentBuildBanne
         private set => this.RaiseAndSetIfChanged(ref _isRateLimitLow, value);
     }
 
-    public DevelopmentBuildBannerViewModel(IOSInterop osInterop, NexusApiRateLimitTracker rateLimitTracker)
+    public DevelopmentBuildBannerViewModel(IOSInterop osInterop, NexusApiRateLimitTracker rateLimitTracker, IDownloadsService downloadsService)
     {
         GiveFeedbackCommand = ReactiveCommand.Create(() => osInterop.OpenUri(GiveFeedbackUri));
+
+        // Afterburn: pause/resume all downloads from the bottom bar. While paused, downloads that start later
+        // (for example the next files of a collection) are paused too, every couple of seconds.
+        ToggleDownloadsPausedCommand = ReactiveCommand.Create(() =>
+        {
+            DownloadsPaused = !DownloadsPaused;
+            if (DownloadsPaused) downloadsService.PauseAll();
+            else downloadsService.ResumeAll();
+        });
+        _pauseTimer = new System.Threading.Timer(_ =>
+        {
+            if (!DownloadsPaused) return;
+            try { downloadsService.PauseAll(); } catch { /* best effort */ }
+        }, null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
 
         Apply(rateLimitTracker.Current);
 
@@ -45,31 +71,34 @@ public class DevelopmentBuildBannerViewModel : AViewModel<IDevelopmentBuildBanne
         rateLimitTracker.Changed += snapshot => Dispatcher.UIThread.Post(() => Apply(snapshot));
     }
 
+    private readonly System.Threading.Timer _pauseTimer;
+
     private void Apply(NexusApiRateLimitSnapshot s)
     {
         if (s.RequestsThisSession == 0) return;
 
         var limitedRecently = s.LastRateLimitedAt is { } t && DateTime.Now - t < TimeSpan.FromMinutes(2);
-        var hourlyLow = s.HourlyLimit > 0 && s.HourlyRemaining <= Math.Max(25, s.HourlyLimit / 20);
+        var dailyLow = s.DailyLimit > 0 && s.DailyRemaining <= Math.Max(100, s.DailyLimit / 20);
         var dailyOut = s.DailyLimit > 0 && s.DailyRemaining <= 0;
 
+        // Afterburn: the bottom bar shows only the daily allowance; the hourly numbers stay in the tooltip.
         if (limitedRecently)
         {
-            var reset = s.HourlyReset != default ? $" · resets {Time(s.HourlyReset)}" : "";
+            var reset = s.DailyReset != default ? $" · resets {Time(s.DailyReset)}" : "";
             RateLimitText = $"Rate Meter: limited{reset}";
         }
         else if (s.HasData)
         {
             RateLimitText = dailyOut
-                ? $"Rate Meter: {N(s.HourlyRemaining)}/{N(s.HourlyLimit)} per hr (daily used up)"
-                : $"Rate Meter: {N(s.HourlyRemaining)}/{N(s.HourlyLimit)} per hr · {N(s.DailyRemaining)}/{N(s.DailyLimit)} today";
+                ? $"Rate Meter: daily limit used up · resets {Time(s.DailyReset)}"
+                : $"Rate Meter: {N(s.DailyRemaining)}/{N(s.DailyLimit)} today";
         }
         else
         {
             RateLimitText = $"Rate Meter: {N(s.RequestsThisSession)} calls this session";
         }
 
-        IsRateLimitLow = limitedRecently || hourlyLow || (dailyOut && s.HourlyRemaining <= Math.Max(25, s.HourlyLimit / 20));
+        IsRateLimitLow = limitedRecently || dailyLow || dailyOut;
 
         var lines = new List<string>
         {

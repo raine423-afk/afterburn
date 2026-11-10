@@ -8,6 +8,12 @@ public interface IDevelopmentBuildBannerViewModel : IViewModelInterface
 {
     public ReactiveCommand<Unit, Unit> GiveFeedbackCommand { get; }
 
+    /// <summary>Pauses or resumes all downloads.</summary>
+    public ReactiveCommand<Unit, Unit> ToggleDownloadsPausedCommand { get; }
+
+    /// <summary>True while the user has paused all downloads.</summary>
+    public bool DownloadsPaused { get; }
+
     /// <summary>Short Nexus API rate-limit summary shown in the bottom bar.</summary>
     public string RateLimitText { get; }
 

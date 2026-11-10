@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.ReactiveUI;
 using JetBrains.Annotations;
 using NexusMods.Sdk;
+using NexusMods.UI.Sdk.Icons;
 using ReactiveUI;
 
 namespace NexusMods.App.UI.Controls.DevelopmentBuildBanner;
@@ -36,6 +37,17 @@ public partial class DevelopmentBuildBannerView : ReactiveUserControl<IDevelopme
         this.WhenActivated(d =>
             {
                 this.BindCommand(ViewModel, vm => vm.GiveFeedbackCommand, view => view.GiveFeedbackButton)
+                    .DisposeWith(d);
+
+                this.BindCommand(ViewModel, vm => vm.ToggleDownloadsPausedCommand, view => view.PauseDownloadsButton)
+                    .DisposeWith(d);
+
+                this.WhenAnyValue(view => view.ViewModel!.DownloadsPaused)
+                    .Subscribe(paused =>
+                    {
+                        PauseDownloadsButton.Text = paused ? "Resume downloads" : "Pause downloads";
+                        PauseDownloadsButton.LeftIcon = paused ? IconValues.PlayArrow : IconValues.Pause;
+                    })
                     .DisposeWith(d);
 
                 this.OneWayBind(ViewModel, vm => vm.RateLimitText, view => view.RateLimitTextBlock.Text)

@@ -7,7 +7,9 @@ namespace NexusMods.App.UI.Controls.DevelopmentBuildBanner;
 public class DevelopmentBuildBannerDesignViewModel : AViewModel<IDevelopmentBuildBannerViewModel>, IDevelopmentBuildBannerViewModel
 {
     public ReactiveCommand<Unit, Unit> GiveFeedbackCommand { get; } = ReactiveCommand.Create(() => { });
-    public string RateLimitText => "Rate Meter: 412/500 per hr · 18,240/20,000 today";
+    public ReactiveCommand<Unit, Unit> ToggleDownloadsPausedCommand { get; } = ReactiveCommand.Create(() => { });
+    public bool DownloadsPaused => false;
+    public string RateLimitText => "Rate Meter: 18,240/20,000 today";
     public string RateLimitDetails => "Design preview";
     public bool IsRateLimitLow => false;
 

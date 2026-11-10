@@ -25,6 +25,18 @@
         CornerRadius="0">
         
         <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+            <!-- Afterburn: pause or resume all downloads -->
+            <controls:StandardButton x:Name="PauseDownloadsButton"
+                                     Text="Pause downloads"
+                                     Type="Tertiary"
+                                     Fill="Strong"
+                                     Size="Small"
+                                     LeftIcon="{x:Static icons:IconValues.Pause}"
+                                     ShowIcon="Left"
+                                     ToolTip.Tip="Pause or resume all downloads"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,8,0"/>
+
             <!-- Nexus API rate-limit monitor -->
             <TextBlock x:Name="RateLimitTextBlock"
                        Theme="{StaticResource BodyMDSemiTheme}"

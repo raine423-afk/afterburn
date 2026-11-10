@@ -587,24 +587,55 @@ internal partial class LoadoutManager : ILoadoutManager
               """
         );
 
-        var rules = rulesQuery
-            .GroupBy(tuple => tuple.SourceId, tuple => (tuple.OtherId, tuple.RuleType))
-            .ToFrozenDictionary(group => group.Key, group => group.ToArray());
+        var allRules = rulesQuery.ToList();
 
-        var sortedItems = new Sorter().Sort(
-            items: items,
-            idSelector: static x => x,
-            ruleFn: id =>
-            {
-                if (!rules.TryGetValue(id, out var itemRules)) return [];
-                return itemRules.Select(ISortRule<EntityId, EntityId> (rule) => (CollectionDownloadRuleType)rule.RuleType switch
+        ImmutableArray<EntityId> SortWith(IReadOnlyCollection<(EntityId SourceId, EntityId OtherId, int RuleType)> ruleSet)
+        {
+            var rules = ruleSet
+                .GroupBy(tuple => tuple.SourceId, tuple => (tuple.OtherId, tuple.RuleType))
+                .ToFrozenDictionary(group => group.Key, group => group.ToArray());
+
+            return new Sorter().Sort(
+                items: items,
+                idSelector: static x => x,
+                ruleFn: id =>
                 {
-                    CollectionDownloadRuleType.Before => new Before<EntityId, EntityId>() { Other = rule.OtherId },
-                    CollectionDownloadRuleType.After => new After<EntityId, EntityId>() { Other = rule.OtherId },
-                    _ => throw new UnreachableException(),
-                }).ToArray();
+                    if (!rules.TryGetValue(id, out var itemRules)) return [];
+                    return itemRules.Select(ISortRule<EntityId, EntityId> (rule) => (CollectionDownloadRuleType)rule.RuleType switch
+                    {
+                        CollectionDownloadRuleType.Before => new Before<EntityId, EntityId>() { Other = rule.OtherId },
+                        CollectionDownloadRuleType.After => new After<EntityId, EntityId>() { Other = rule.OtherId },
+                        _ => throw new UnreachableException(),
+                    }).ToArray();
+                }
+            ).ToImmutableArray();
+        }
+
+        ImmutableArray<EntityId> sortedItems;
+        try
+        {
+            sortedItems = SortWith(allRules);
+        }
+        catch (InvalidOperationException)
+        {
+            // Afterburn: some collections contain load-order rules that contradict each other (A before B, B before A),
+            // which used to stop the whole install. Keep every rule that doesn't create a loop and skip the rest.
+            var kept = new List<(EntityId SourceId, EntityId OtherId, int RuleType)>(allRules.Count);
+            var skipped = 0;
+            foreach (var rule in allRules)
+            {
+                kept.Add(rule);
+                try { SortWith(kept); }
+                catch (InvalidOperationException)
+                {
+                    kept.RemoveAt(kept.Count - 1);
+                    skipped++;
+                }
             }
-        ).ToImmutableArray();
+
+            _logger.LogWarning("Collection {CollectionId} has {Count} conflicting load-order rule(s); they were skipped", collectionId.Value, skipped);
+            sortedItems = SortWith(kept);
+        }
 
         using var tx = _connection.BeginTransaction();
 
