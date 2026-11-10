@@ -175,7 +175,12 @@ public class NxFileStore : IFileStore, IReadOnlyStreamSource
         // While this is also creating an archive, we don't take the write lock, as the archive new and thus not known yet
         using var _ = _lock.ReadLock();
 
-        var builder = new NxPackerBuilder();
+        // Afterburn: use fast Zstandard levels when adding mods to the library. The library defaults
+        // (level 16 for small files, 9 for large ones) are slow to compress; level 3 is many times faster
+        // and makes archives only slightly larger. Reading files back out is just as fast either way.
+        var builder = new NxPackerBuilder()
+            .WithSolidCompressionLevel(3)
+            .WithChunkedLevel(3);
         Dictionary<Hash, (ArchivedFileEntry, Stream)> filesToBackup;
 
         enumerable = enumerable.DistinctBy(x => x.Hash);
