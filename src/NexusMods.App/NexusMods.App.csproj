@@ -10,6 +10,20 @@
         <DefineConstants />
     </PropertyGroup>
 
+    <!-- Afterburn: smaller, faster release builds -->
+    <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+        <!-- Only ship English resources from libraries (drops ~40 unused language folders). -->
+        <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+        <!-- Don't copy XML API documentation into the app folder. -->
+        <PublishDocumentationFiles>false</PublishDocumentationFiles>
+        <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+        <!-- Precompile for modern Intel and AMD CPUs (AVX2: Intel Haswell/2013+, AMD Zen/2017+).
+             Older CPUs still work: .NET falls back to compiling that code at startup. -->
+        <PublishReadyToRunCrossgen2ExtraArgs>--instruction-set:x86-x64-v3</PublishReadyToRunCrossgen2ExtraArgs>
+        <TieredCompilation>true</TieredCompilation>
+    </PropertyGroup>
+
     <ItemGroup>
         <ProjectReference Include="..\NexusMods.Abstractions.Games.FileHashes\NexusMods.Abstractions.Games.FileHashes.csproj" />
         <ProjectReference Include="..\NexusMods.Abstractions.Logging\NexusMods.Abstractions.Logging.csproj" />
