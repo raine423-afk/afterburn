@@ -85,6 +85,8 @@ public sealed class LoginManager : IDisposable, ILoginManager
             {
                 if (!hasValue)
                 {
+                    // Afterburn: when logged in with a personal API key there is no OAuth token, so don't log out.
+                    if (_msgFactory is ApiKeyMessageFactory) return;
                     _cachedUserInfo.Evict();
                     _userInfo.OnNext(value: null);
                 }
@@ -95,6 +97,25 @@ public sealed class LoginManager : IDisposable, ILoginManager
                     _userInfo.OnNext(userInfo);
                 }
             }, awaitOperation: AwaitOperation.Sequential, configureAwait: false);
+
+        // Afterburn: a personal API key (NEXUS_API_KEY) has no OAuth token to watch, so verify it once at startup.
+        if (_msgFactory is ApiKeyMessageFactory)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var userInfo = await Verify(CancellationToken.None);
+                    if (userInfo is null) return;
+                    _cachedUserInfo.Store(userInfo);
+                    _userInfo.OnNext(userInfo);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogWarning(e, "Failed to verify the Nexus Mods personal API key");
+                }
+            });
+        }
 
         // Set up periodic refresh to prevent cache expiry
         _periodicRefreshDisposable = Observable
