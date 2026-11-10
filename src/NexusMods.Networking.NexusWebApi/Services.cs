@@ -25,7 +25,7 @@ public static class Services
     {
         collection.AddLoginVerbs();
 
-        apiKeyAuth ??= Environment.GetEnvironmentVariable(ApiKeyMessageFactory.NexusApiKeyEnvironmentVariable) != null;
+        apiKeyAuth ??= ApiKeyMessageFactory.ReadEnvironmentApiKey() != null;
 
         if (apiKeyAuth!.Value)
         {
