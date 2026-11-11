@@ -31,6 +31,11 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <!-- Afterburn: use the patched D-Bus library that Avalonia brings in (GHSA-xrw6-gwf8-vvr9). -->
+        <PackageReference Include="Tmds.DBus.Protocol" />
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\NexusMods.Abstractions.Games.FileHashes\NexusMods.Abstractions.Games.FileHashes.csproj" />
         <ProjectReference Include="..\NexusMods.Abstractions.Logging\NexusMods.Abstractions.Logging.csproj" />
         <ProjectReference Include="..\NexusMods.Backend\NexusMods.Backend.csproj" />

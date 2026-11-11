@@ -5,7 +5,6 @@
         <WarningsAsErrors>Nullable</WarningsAsErrors>
     </PropertyGroup>
 
-    <ItemGroup>
-        <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="all" />
-    </ItemGroup>
+    <!-- Afterburn: the separate Microsoft.SourceLink.GitHub 8.0.0 package was removed (it pulls in
+         Microsoft.Build.Tasks.Git 8.0.0, GHSA-23fw-v26w-5fgq). The .NET SDK includes Source Link itself. -->
 </Project>
