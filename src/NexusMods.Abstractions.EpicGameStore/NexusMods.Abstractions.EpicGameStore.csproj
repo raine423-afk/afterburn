@@ -3,6 +3,9 @@
     <Import Project="$([MSBuild]::GetPathOfFileAbove('NuGet.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
     <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" VersionOverride="9.0.23" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" VersionOverride="9.0.23" />
+        <PackageReference Include="Microsoft.Extensions.ObjectPool" VersionOverride="9.0.23" />
       <PackageReference Include="NexusMods.MnemonicDB.Abstractions" />
     </ItemGroup>
     

@@ -21,6 +21,9 @@
         <PackageReference Include="Humanizer" />
         <PackageReference Include="LiveChartsCore.SkiaSharpView.Avalonia" />
         <PackageReference Include="Markdown.Avalonia.Tight" />
+        <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" VersionOverride="9.0.23" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" VersionOverride="9.0.23" />
+        <PackageReference Include="Microsoft.Extensions.ObjectPool" VersionOverride="9.0.23" />
         <PackageReference Include="ObservableCollections.R3" />
         <PackageReference Include="Projektanker.Icons.Avalonia.MaterialDesign" />
         <PackageReference Include="QoiSharp" />
