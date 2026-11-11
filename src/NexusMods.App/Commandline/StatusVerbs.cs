@@ -22,7 +22,7 @@ public static class StatusVerbs
     /// </summary>
     /// <param name="renderer"></param>
     /// <returns></returns>
-    [Verb(HeartbeatCommand, "Returns process uptime for the Nexus Mods app.")]
+    [Verb(HeartbeatCommand, "Returns process uptime for Afterburn.")]
     private static async Task<int> Heartbeat([Injected] IRenderer renderer)
     {
         var process = Process.GetCurrentProcess();

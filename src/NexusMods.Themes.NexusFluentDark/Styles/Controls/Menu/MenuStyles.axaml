@@ -43,7 +43,7 @@
                             <Separator />
 
                             <MenuItem Header="With CheckBox" ToggleType="CheckBox" IsChecked="True" />
-                            <MenuItem Header="Nexus Mods">
+                            <MenuItem Header="Afterburn">
                                 <MenuItem.Icon>
                                     <icons:UnifiedIcon Value="{x:Static icons:IconValues.NexusColor}" />
                                 </MenuItem.Icon>

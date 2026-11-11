@@ -32,6 +32,8 @@ All changes made 2026-11-09 unless noted.
 - Sharper corners throughout (`ElementCornerRadius.axaml`).
 
 ### Repository
+- The Windows launcher is renamed `NexusMods.App.exe` → `Afterburn.exe` after publish (`NexusMods.App.csproj`, `installer/afterburn.iss`, `uninstall.bat`, `uninstall-helper.ps1`).
+- Final branding pass: Windows registry keys and protocol handler IDs now use "Afterburn"; Linux desktop/AppStream metadata, NuGet package author and URLs, the collection "Created with" text, the in-app changelog source and Dependabot reviewer no longer name Nexus Mods; removed the upstream docs site, IDE settings, Qodana/Codecov configs and the upstream release notes (kept in git history). Copyright notices, the license, code identifiers/namespaces, and references to the Nexus Mods website and API (login, downloads, collections) are intentionally kept.
 - Removed Nexus Mods' CI/CD workflows (signing, NuGet publishing, releases and their docs site), the `docs/Nexus` theme submodule and `mkdocs.yml`. Added a simple Afterburn build workflow (`.github/workflows/build.yaml`), a new issue template and `CONTRIBUTING.md`, and an Afterburn section in `CHANGELOG.md`.
 
 ### Features and fixes

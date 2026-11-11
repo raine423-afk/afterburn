@@ -30,14 +30,14 @@ internal partial class WindowsInterop
         return ValueTask.CompletedTask;
     }
 
-    private static string CreateProgId(string uriScheme) => $"NexusMods.App.{uriScheme}";
+    private static string CreateProgId(string uriScheme) => $"Afterburn.{uriScheme}";
 
     [SupportedOSPlatform("windows")]
     private void RegisterApplication(string uriScheme)
     {
         // https://learn.microsoft.com/en-us/windows/win32/shell/default-programs
 
-        const string capabilitiesPath = @"SOFTWARE\Nexus Mods\NexusMods.App\Capabilities";
+        const string capabilitiesPath = @"SOFTWARE\Afterburn\Capabilities";
 
         using var key = Registry.CurrentUser.CreateSubKey(capabilitiesPath);
         key.SetValue("ApplicationName", "Afterburn");

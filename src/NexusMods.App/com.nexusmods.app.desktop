@@ -2,7 +2,7 @@
 Type=Application
 # Version=1.5
 # Commented out because PupNet needs updating to recognise 1.5, so letting it default to latest is ideal.
-Name=Nexus Mods App
+Name=Afterburn
 GenericName=Mod Manager
 Comment=Mod Manager for your games
 Categories=Game
@@ -13,5 +13,5 @@ Icon=com.nexusmods.app
 Exec=${INSTALL_EXEC} %u
 TryExec=${INSTALL_TRYEXEC}
 X-AppImage-Integrate=true
-X-AppImage-Name=NexusMods.App
+X-AppImage-Name=Afterburn
 X-AppImage-Arch=x86_64

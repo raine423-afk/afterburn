@@ -5,14 +5,14 @@
     </PropertyGroup>
 
     <PropertyGroup>
-        <Authors>Nexus Mods</Authors>
+        <Authors>Afterburn contributors</Authors>
 
         <PackageIcon>Nexus-Icon.png</PackageIcon>
         <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
 
-        <PackageProjectUrl>https://github.com/Nexus-Mods/NexusMods.App</PackageProjectUrl>
-        <RepositoryUrl>https://github.com/Nexus-Mods/NexusMods.App.git</RepositoryUrl>
+        <PackageProjectUrl>https://github.com/raine423-afk/afterburn</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/raine423-afk/afterburn.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
 
         <GenerateDocumentationFile>true</GenerateDocumentationFile>

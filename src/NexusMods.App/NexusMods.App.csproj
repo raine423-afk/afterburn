@@ -107,4 +107,10 @@
             Condition="'$(RuntimeIdentifier)' == 'win-x64' Or '$(RuntimeIdentifier)' == 'win-x86' Or '$(RuntimeIdentifier)' == 'win'">
         <Copy SourceFiles="uninstall.bat" DestinationFolder="$(PublishDir)" />
     </Target>
+
+    <!-- Rename the Windows launcher so Task Manager, shortcuts and the installer say "Afterburn".
+         The apphost finds NexusMods.App.dll by an embedded name, so renaming the .exe is safe. -->
+    <Target Name="AfterburnRenameLauncher" AfterTargets="Publish" Condition="'$(OS)' == 'Windows_NT'">
+        <Move SourceFiles="$(PublishDir)NexusMods.App.exe" DestinationFiles="$(PublishDir)Afterburn.exe" Condition="Exists('$(PublishDir)NexusMods.App.exe')" />
+    </Target>
 </Project>

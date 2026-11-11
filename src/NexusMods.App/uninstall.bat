@@ -1,1 +1,1 @@
-NexusMods.App.exe uninstall-app
+Afterburn.exe uninstall-app
