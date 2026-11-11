@@ -32,6 +32,9 @@ public class FomodXmlInstaller : ALibraryArchiveInstaller
     private readonly TemporaryFileManager _temporaryFileManager;
     private readonly IFileStore _fileStore;
 
+    // Afterburn: only one FOMOD installer runs at a time, so two dialogs can never fight over the same state.
+    private static readonly SemaphoreSlim FomodDialogGate = new(1, 1);
+
     /// <summary>
     /// Creates a new instance of <see cref="FomodXmlInstaller"/> given the provided <paramref name="provider"/> and <paramref name="fomodInstallationPath"/>.
     /// </summary>
@@ -101,31 +104,34 @@ public class FomodXmlInstaller : ALibraryArchiveInstaller
         await mod.InitializeWithoutLoadingScript();
 
         // NOTE(erri120): The FOMOD library calls us, so this is the only way we can pass data along.
-        var installerDelegates = _delegates as InstallerDelegates;
-        if (installerDelegates is not null)
+        // Afterburn: this installer object is shared by every mod for the game, so it used to share one installer
+        // window as well. When an update or collection installed two FOMOD mods at the same time, the second one
+        // took over the first one's window and the first dialog's Next button stopped doing anything. Each run now
+        // gets its own delegates and window, and FOMOD dialogs are shown one at a time.
+        var delegates = _delegates;
+        if (_delegates is InstallerDelegates)
         {
+            var runDelegates = (InstallerDelegates)ServiceProvider.GetRequiredService<ICoreDelegates>();
             if (options is not null)
             {
                 // NOTE(halgari) The support for passing in presets to the installer is utterly broken. So we're going to
                 // something different: we will create a new guided installer that will simply emit the user choices based on the
                 // provided options.
                 var installer = new PresetGuidedInstaller(options);
-                installerDelegates.UiDelegates = new UiDelegates(ServiceProvider.GetRequiredService<ILogger<UiDelegates>>(), installer);
+                runDelegates.UiDelegates = new UiDelegates(ServiceProvider.GetRequiredService<ILogger<UiDelegates>>(), installer);
             }
 
-            installerDelegates.UiDelegates.CurrentFomodArchiveFiles = fomodArchiveFiles;
+            runDelegates.UiDelegates.CurrentFomodArchiveFiles = fomodArchiveFiles;
+            delegates = runDelegates;
         }
 
         var rawScript = await LoadScript(xmlFile.AsLibraryFile().Hash, cancellationToken);
 
-        var executor = _scriptType.CreateExecutor(mod, _delegates);
+        var executor = _scriptType.CreateExecutor(mod, delegates);
         var installScript = _scriptType.LoadScript(rawScript, true);
         FixScript(installScript, fomodArchiveFiles, _logger);
 
-        var instructions = await executor.Execute(installScript, "", null);
-
-        // NOTE(err120): Reset the previously provided data
-        if (installerDelegates is not null) installerDelegates.UiDelegates.CurrentFomodArchiveFiles = fomodArchiveFiles;
+        var instructions = await OneAtATime(() => executor.Execute(installScript, "", null), cancellationToken);
 
         var errors = instructions.Where(instruction => instruction.type == "error").ToArray();
         if (errors.Length != 0) throw new Exception(string.Join("; ", errors.Select(err => err.source)));
@@ -135,6 +141,19 @@ public class FomodXmlInstaller : ALibraryArchiveInstaller
 
         InstructionsToLoadoutItems(transaction, loadout, loadoutGroup,instructions, fomodArchiveFiles, _fomodInstallationPath);
         return new Success();
+    }
+
+    private static async Task<T> OneAtATime<T>(Func<Task<T>> run, CancellationToken cancellationToken)
+    {
+        await FomodDialogGate.WaitAsync(cancellationToken);
+        try
+        {
+            return await run();
+        }
+        finally
+        {
+            FomodDialogGate.Release();
+        }
     }
 
     private async ValueTask<string> LoadScript(Hash hash, CancellationToken cancellationToken = default)
