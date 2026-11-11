@@ -34,6 +34,7 @@ All changes made 2026-11-09 unless noted.
 - Sharper corners throughout (`ElementCornerRadius.axaml`).
 
 ### Repository
+- Startup: the embedded game-hashes database is no longer re-imported on every launch (timestamp comparison now uses whole seconds) (`FileHashesService.cs`).
 - Path-escape hardening: game paths with `..` segments or roots are refused before they become disk paths (`GamePath.cs`, `GameLocations.cs`), and the 7-Zip trailing-space clean-up never moves or deletes outside the extraction folder (`SevenZipExtractor.cs`).
 - Description images load only from Nexus Mods and GitHub hosts; all image downloads must be HTTPS and are capped at 20 MB (`MarkdownRendererViewModel.cs`, `HttpLoader.cs`). Optional Authenticode signing of `Afterburn.exe` and the installer in CI when a certificate secret is configured (`build.yaml`).
 - Security: the local command channel now requires a per-session secret stored in the user's private app folder (`SyncFile.cs`, `CliServer.cs`, `CliClient.cs`); Windows opens links and files via the shell directly instead of `cmd.exe` (`WindowsInterop.cs`); the GitHub owner used for updates, bug reports and links is set to this repository (`AfterburnBrand.cs`); update downloads are only offered from GitHub (`UpdaterViewModel.cs`).

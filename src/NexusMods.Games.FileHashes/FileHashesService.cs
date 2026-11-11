@@ -156,7 +156,9 @@ internal sealed class FileHashesService : IFileHashesService, IDisposable, IHost
 
         // Afterburn: the database embedded in this build can be newer than one already on disk
         // (for example an older database left by the Nexus Mods app). Add it so newer game versions are recognised.
-        if (!ApplicationConstants.IsDebug && existingDatabases.Length > 0 && existingDatabases[0].CreationTime < ApplicationConstants.BuildDate)
+        // Compare whole seconds: folder names store the time in seconds, so comparing against the exact build time
+        // made the copy on disk always look older and re-imported the database on every launch.
+        if (!ApplicationConstants.IsDebug && existingDatabases.Length > 0 && existingDatabases[0].CreationTime.ToUnixTimeSeconds() < ApplicationConstants.BuildDate.ToUnixTimeSeconds())
         {
             _logger.LogInformation("Embedded game hashes database is newer than the one on disk, adding it");
             var embeddedDatabase = await AddEmbeddedDatabase(cancellationToken: cancellationToken);
