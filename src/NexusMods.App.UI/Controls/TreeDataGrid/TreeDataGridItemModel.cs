@@ -114,7 +114,7 @@ public class TreeDataGridItemModel<TModel, TKey> : TreeDataGridItemModel, ITreeD
         {
             // NOTE(erri120): TreeDataGrid uses `HasChildren` to show/hide the expander.
             model.HasChildrenObservable
-                .OnUI()
+                .OnUIIfNeeded()
                 .SubscribeWithErrorLogging(hasChildren => model._hasChildren.Value = hasChildren)
                 .AddTo(disposables);
 
@@ -147,7 +147,7 @@ public class TreeDataGridItemModel<TModel, TKey> : TreeDataGridItemModel, ITreeD
                         if (isInitializing && model._childrenObservableSerialDisposable.Disposable is null)
                         {
                             model._childrenObservableSerialDisposable.Disposable = model.ChildrenObservable
-                                .OnUI()
+                                .OnUIIfNeeded()
                                 .Do(changeSet => model._children.ApplyChanges(changeSet))
                                 .DisposeMany()
                                 .SubscribeWithErrorLogging();

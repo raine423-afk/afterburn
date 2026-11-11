@@ -71,6 +71,7 @@ internal sealed class WorkspaceController : ReactiveObject, IWorkspaceController
         Debug.Assert(_workspaces.Count == 0);
 
         IWorkspaceViewModel? activeWorkspace = null;
+        var deferred = new List<(IWorkspaceViewModel Workspace, WorkspaceData Data)>();
 
         foreach (var workspaceData in data.Workspaces)
         {
@@ -85,33 +86,29 @@ internal sealed class WorkspaceController : ReactiveObject, IWorkspaceController
 
             var vm = CreateWorkspace(
                 context: Optional<IWorkspaceContext>.Create(workspaceData.Context),
-                pageData: Optional<PageData>.None
+                pageData: Optional<PageData>.None,
+                addDefaultPanel: false
             );
 
-            try
-            {
-                vm.FromData(workspaceData);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Exception while restoring Workspace `{WorkspaceId}`, resetting to default", workspaceData.Id);
-
-                vm.FromData(new WorkspaceData
-                {
-                    Context = vm.Context,
-                    Id = vm.Id,
-                    Panels = [
-                        new PanelData
-                        {
-                            LogicalBounds = MathUtils.One,
-                            Tabs = [],
-                            SelectedTabId = PanelTabId.DefaultValue,
-                        },
-                    ],
-                });
-            }
+            // Afterburn: only the visible workspace is restored right away; the others are restored just after the
+            // window has been drawn, so startup doesn't build pages nobody can see yet.
+            if (isActiveWorkspace) RestorePanels(vm, workspaceData);
+            else deferred.Add((vm, workspaceData));
 
             if (isActiveWorkspace) activeWorkspace = vm;
+        }
+
+        if (activeWorkspace is null)
+        {
+            // No visible workspace was saved, so any of them may be shown first: restore everything now.
+            foreach (var (deferredWorkspace, deferredData) in deferred) RestorePanels(deferredWorkspace, deferredData);
+        }
+        else if (deferred.Count > 0)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                foreach (var (deferredWorkspace, deferredData) in deferred) RestorePanels(deferredWorkspace, deferredData);
+            }, DispatcherPriority.Background);
         }
 
         if (_workspaces.Count == 0)
@@ -123,7 +120,36 @@ internal sealed class WorkspaceController : ReactiveObject, IWorkspaceController
         ChangeActiveWorkspace(activeWorkspace?.Id ?? _workspaces.Keys.First());
     }
 
+    private void RestorePanels(IWorkspaceViewModel workspace, WorkspaceData data)
+    {
+        try
+        {
+            workspace.FromData(data);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Exception while restoring Workspace `{WorkspaceId}`, resetting to default", data.Id);
+
+            workspace.FromData(new WorkspaceData
+            {
+                Context = workspace.Context,
+                Id = workspace.Id,
+                Panels = [
+                    new PanelData
+                    {
+                        LogicalBounds = MathUtils.One,
+                        Tabs = [],
+                        SelectedTabId = PanelTabId.DefaultValue,
+                    },
+                ],
+            });
+        }
+    }
+
     public IWorkspaceViewModel CreateWorkspace(Optional<IWorkspaceContext> context, Optional<PageData> pageData)
+        => CreateWorkspace(context, pageData, addDefaultPanel: true);
+
+    private IWorkspaceViewModel CreateWorkspace(Optional<IWorkspaceContext> context, Optional<PageData> pageData, bool addDefaultPanel)
     {
         Dispatcher.UIThread.VerifyAccess();
 
@@ -140,6 +166,10 @@ internal sealed class WorkspaceController : ReactiveObject, IWorkspaceController
         vm.Subtitle = _workspaceAttachmentsFactory.CreateSubtitleFor(vm.Context);
 
         _workspaces.AddOrUpdate(vm);
+
+        // Afterburn: when a saved workspace is restored its panels are replaced right after, so building a default
+        // tab first (which asks every page type for its details) was wasted startup time.
+        if (!addDefaultPanel) return vm;
 
         var addPanelBehavior = pageData.HasValue
             ? new AddPanelBehavior(new AddPanelBehavior.WithCustomTab(pageData.Value))

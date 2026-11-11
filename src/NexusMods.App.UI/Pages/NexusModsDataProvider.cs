@@ -162,13 +162,16 @@ public class NexusModsDataProvider : ILibraryDataProvider, ILoadoutDataProvider
         AddRelatedCollectionsComponentToParent(modPageId, libraryFilter, linkedLoadoutItemsObservable, parentItemModel);
         
         // Update available
-        var newestModPageObservable = _modUpdateService.GetNewestModPageVersionObservable(modPage);
+        // Afterburn: one shared update check per row (it was subscribed three times: version, new version, button).
+        var newestModPageObservable = _modUpdateService.GetNewestModPageVersionObservable(modPage)
+            .Replay(1)
+            .RefCount();
         var currentUpdateVersionObservable = newestModPageObservable
             .Select(static optional => !optional.HasValue ? "" : optional.Value.MappingWithNewestFile().File.Version)
-            .OnUI();
+            .OnUIIfNeeded();
         var newestVersionObservable = newestModPageObservable
             .Select(static optional => optional.Convert(static updatesOnPage => updatesOnPage.NewestFile().Version))
-            .OnUI();
+            .OnUIIfNeeded();
 
         parentItemModel.AddObservable(
             key: LibraryColumns.ItemVersion.NewVersionComponentKey,
@@ -184,7 +187,7 @@ public class NexusModsDataProvider : ILibraryDataProvider, ILoadoutDataProvider
         );
 
         // Update button
-        var updatesOnPage = _modUpdateService.GetNewestModPageVersionObservable(modPage);
+        var updatesOnPage = newestModPageObservable;
         parentItemModel.AddObservable(
             key: LibraryColumns.Actions.UpdateComponentKey,
             observable: updatesOnPage,
@@ -257,7 +260,7 @@ public class NexusModsDataProvider : ILibraryDataProvider, ILoadoutDataProvider
         var newestVersionObservable = _modUpdateService
             .GetNewestFileVersionObservable(fileMetadata)
             .Select(static optional => optional.Convert(static updateOnPage => updateOnPage.NewestFile.Version))
-            .OnUI();
+            .OnUIIfNeeded();
 
         itemModel.AddObservable(
             key: LibraryColumns.ItemVersion.NewVersionComponentKey,

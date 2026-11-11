@@ -277,6 +277,25 @@ public static class LibraryComponents
         public ValueComponent<bool> HasInstalledCollections { get; }
         public ValueComponent<bool> HasDownloadedCollections { get; }
 
+        /// <summary>Afterburn: built from names that are already worked out and shared.</summary>
+        public RelatedCollectionsComponent(IObservable<CollectionNames> names)
+        {
+            InstalledCollections = new StringComponent("", names.Select(static x => string.Join(", ", x.Installed)));
+            DownloadedCollections = new StringComponent("", names.Select(static x => string.Join(", ", x.Downloaded)));
+            ShowSeparator = new ValueComponent<bool>(false, names.Select(static x => x.Installed.Length > 0 && x.Downloaded.Length > 0));
+            HasInstalledCollections = new ValueComponent<bool>(false, names.Select(static x => x.Installed.Length > 0));
+            HasDownloadedCollections = new ValueComponent<bool>(false, names.Select(static x => x.Downloaded.Length > 0));
+
+            _activationDisposable = this.WhenActivated(static (self, disposables) =>
+            {
+                self.InstalledCollections.Activate().AddTo(disposables);
+                self.DownloadedCollections.Activate().AddTo(disposables);
+                self.ShowSeparator.Activate().AddTo(disposables);
+                self.HasInstalledCollections.Activate().AddTo(disposables);
+                self.HasDownloadedCollections.Activate().AddTo(disposables);
+            });
+        }
+
         public RelatedCollectionsComponent(IObservable<IChangeSet<string>> installedCollections, IObservable<IChangeSet<string>> downloadedCollections)
         {
             InstalledCollections = new StringComponent("", installedCollections.QueryWhenChanged(items => string.Join(", ", items)));

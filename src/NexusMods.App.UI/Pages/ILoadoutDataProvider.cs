@@ -48,6 +48,9 @@ public static class LoadoutDataProviderHelper
         return loadoutDataProviders
             .Select(provider => provider.CountLoadoutItems(loadoutFilter))
             .CombineLatest(static counts => counts.Sum())
+            // Afterburn: each provider starts at 0 and reports its real count a moment later; wait for them to settle so
+            // labels go straight to the final number instead of counting up through 0 and partial sums.
+            .Throttle(TimeSpan.FromMilliseconds(100))
             // Afterburn: count on a background thread. Counting reads the whole loadout, and the menu, header and
             // loadout card all ask for it when the app opens; every caller already moves the result to the UI thread.
             .SubscribeOn(System.Reactive.Concurrency.TaskPoolScheduler.Default);

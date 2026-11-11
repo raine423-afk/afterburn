@@ -58,7 +58,9 @@ public class LoadoutViewModel : APageViewModel<ILoadoutViewModel>, ILoadoutViewM
 
     public LoadoutPageSubTabs SelectedSubTab { get; }
     public bool HasRulesSection { get; }
-    public ISortingSelectionViewModel RulesSectionViewModel { get; }
+    // Afterburn: the Rules tab (load order and file conflicts) is built the first time it's opened, not with every page.
+    private readonly Lazy<ISortingSelectionViewModel> _rulesSection;
+    public ISortingSelectionViewModel RulesSectionViewModel => _rulesSection.Value;
 
     public bool IsCollection { get; }
     private BindableReactiveProperty<string> CollectionName { get; }
@@ -162,9 +164,9 @@ public class LoadoutViewModel : APageViewModel<ILoadoutViewModel>, ILoadoutViewM
                 .QueryWhenChanged(collections => collections.Count == 1)
                 .ToObservable();
 
-            RulesSectionViewModel = new SortingSelectionViewModel(serviceProvider, windowManager, loadoutId,
+            _rulesSection = new Lazy<ISortingSelectionViewModel>(() => new SortingSelectionViewModel(serviceProvider, windowManager, loadoutId,
                 canEditObservable: isSingleCollectionObservable
-            );
+            ));
 
             CommandShareCollection = Adapter.IsSourceEmpty.Select(b => !b).ToReactiveCommand<Unit>(async (unit, cancellationToken) =>
                 {
@@ -432,9 +434,9 @@ public class LoadoutViewModel : APageViewModel<ILoadoutViewModel>, ILoadoutViewM
 
             TabTitle = Language.LoadoutViewPageTitle;
             TabIcon = IconValues.FormatAlignJustify;
-            RulesSectionViewModel = new SortingSelectionViewModel(serviceProvider, windowManager, loadoutId,
+            _rulesSection = new Lazy<ISortingSelectionViewModel>(() => new SortingSelectionViewModel(serviceProvider, windowManager, loadoutId,
                 Optional<Observable<bool>>.None
-            );
+            ));
             CommandRenameGroup = new ReactiveCommand();
             CommandShareCollection = new ReactiveCommand();
             CommandUploadDraftRevision = new ReactiveCommand();

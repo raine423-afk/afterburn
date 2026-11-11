@@ -276,13 +276,14 @@ public class LoadoutLeftMenuViewModel : AViewModel<ILoadoutLeftMenuViewModel>, I
                         };
 
                     })
-                    .OnUI()
+                    // Afterburn: deliver straight away when already on the UI thread, so the menu is complete on its first draw.
+                    .OnUIIfNeeded()
                     .SubscribeWithErrorLogging(item => LeftMenuItemExternalChanges = item)
                     .DisposeWith(disposable);
 
                 collectionItemsObservable
                     .MergeChangeSets(collectionRevisionsObservable)
-                    .OnUI()
+                    .OnUIIfNeeded()
                     .SortAndBind(out _leftMenuCollectionItems, collectionItemComparer)
                     .Subscribe()
                     .DisposeWith(disposable);
@@ -319,7 +320,7 @@ public class LoadoutLeftMenuViewModel : AViewModel<ILoadoutLeftMenuViewModel>, I
                     .Transform(collection => collection.Id)
                     .QueryWhenChanged(collections => collections.Count == 1)
                     .ToObservable()
-                    .ObserveOnUIThreadDispatcher()
+                    .ObserveOnUIThreadIfNeeded()
                     .Subscribe(hasSingleCollection => HasSingleCollection = hasSingleCollection)
                     .DisposeWith(disposable);
             }

@@ -65,8 +65,10 @@
             </Button>
 
             <!-- Progress bar -->
+            <!-- Afterburn: a full, still bar instead of the moving "indeterminate" one, which redrew every frame while applying. -->
             <ProgressBar x:Name="ProgressBarControl"
-                         IsIndeterminate="True"
+                         IsIndeterminate="False"
+                         Value="1"
                          ShowProgressText="True"
                          ProgressTextFormat="Applying..."
                          Minimum="0"

@@ -29,7 +29,7 @@ jobs:
         with:
           dotnet-version: '9.x'
       - name: Publish (self-contained, so users don't need to install .NET)
-        run: dotnet publish src/NexusMods.App/NexusMods.App.csproj -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -o publish -nologo "-clp:ErrorsOnly"
+        run: dotnet publish src/NexusMods.App/NexusMods.App.csproj -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -p:PublishReadyToRunComposite=true -p:TieredPGO=false -o publish -nologo "-clp:ErrorsOnly"
       - name: Check dependencies for known vulnerabilities
         shell: pwsh
         run: |

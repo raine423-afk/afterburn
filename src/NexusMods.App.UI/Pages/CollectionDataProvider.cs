@@ -53,6 +53,9 @@ public class CollectionDataProvider
             .Replay(bufferSize: 1)
             .RefCount();
 
+        // Afterburn: one shared status table for every row of this collection (see ObserveAllStatuses).
+        var statuses = _collectionDownloader.ObserveAllStatuses(revisionMetadata, collectionGroupObservable);
+
         return _connection
             .ObserveDatoms(CollectionDownloadEntity.CollectionRevision, revisionMetadata)
             .AsEntityIds()
@@ -62,21 +65,30 @@ public class CollectionDataProvider
             {
                 if (downloadEntity.TryGetAsCollectionDownloadNexusMods(out var nexusModsDownload))
                 {
-                    return ToItemModel(nexusModsDownload, collectionGroupObservable);
+                    return ToItemModel(nexusModsDownload, collectionGroupObservable, statuses);
                 }
 
                 if (downloadEntity.TryGetAsCollectionDownloadExternal(out var externalDownload))
                 {
-                    return ToItemModel(externalDownload, collectionGroupObservable);
+                    return ToItemModel(externalDownload, collectionGroupObservable, statuses);
                 }
 
                 if (downloadEntity.TryGetAsCollectionDownloadBundled(out var bundledDownload))
                 {
-                    return ToItemModel(bundledDownload, collectionGroupObservable);
+                    return ToItemModel(bundledDownload, collectionGroupObservable, statuses);
                 }
 
                 throw new UnreachableException();
             });
+    }
+
+    private static IObservable<CollectionDownloadStatus> StatusFrom(
+        IObservable<IReadOnlyDictionary<EntityId, CollectionDownloadStatus>> statuses,
+        EntityId downloadId)
+    {
+        return statuses
+            .Select(all => all.TryGetValue(downloadId, out var status) ? status : new CollectionDownloadStatus(new CollectionDownloadStatus.NotDownloaded()))
+            .DistinctUntilChanged();
     }
 
     private static IObservable<bool> ShouldShow(CollectionDownloadEntity.ReadOnly downloadEntity, IObservable<CollectionDownloadsFilter> filterObservable)
@@ -95,7 +107,8 @@ public class CollectionDataProvider
 
     private CompositeItemModel<EntityId> ToItemModel(
         CollectionDownloadNexusMods.ReadOnly download,
-        IObservable<Optional<CollectionGroup.ReadOnly>> groupObservable)
+        IObservable<Optional<CollectionGroup.ReadOnly>> groupObservable,
+        IObservable<IReadOnlyDictionary<EntityId, CollectionDownloadStatus>> statuses)
     {
         var itemModel = new CompositeItemModel<EntityId>(download.Id);
 
@@ -106,7 +119,7 @@ public class CollectionDataProvider
         if (download.FileMetadata.Size.TryGet(out var size))
             itemModel.Add(SharedColumns.ItemSize.ComponentKey, new SizeComponent(value: size));
 
-        var statusObservable = _collectionDownloader.GetStatusObservable(download.AsCollectionDownload(), groupObservable).ToObservable();
+        var statusObservable = StatusFrom(statuses, download.Id).ToObservable();
         var downloadJobStatusObservable = GetJobStatusObservable<NexusModsDownloadJob>(job => job.FileMetadata.Id == download.FileMetadata);
 
         AddDownloadAction(
@@ -129,7 +142,8 @@ public class CollectionDataProvider
 
     private CompositeItemModel<EntityId> ToItemModel(
         CollectionDownloadExternal.ReadOnly download,
-        IObservable<Optional<CollectionGroup.ReadOnly>> groupObservable)
+        IObservable<Optional<CollectionGroup.ReadOnly>> groupObservable,
+        IObservable<IReadOnlyDictionary<EntityId, CollectionDownloadStatus>> statuses)
     {
         var itemModel = new CompositeItemModel<EntityId>(download.Id);
 
@@ -138,7 +152,7 @@ public class CollectionDataProvider
         itemModel.Add(LibraryColumns.ItemVersion.CurrentVersionComponentKey, new VersionComponent(value: download.Md5.ToString()));
         itemModel.Add(SharedColumns.ItemSize.ComponentKey, new SizeComponent(value: download.Size));
 
-        var statusObservable = _collectionDownloader.GetStatusObservable(download.AsCollectionDownload(), groupObservable).ToObservable().Publish(initialValue: new CollectionDownloadStatus(new CollectionDownloadStatus.NotDownloaded())).RefCount();
+        var statusObservable = StatusFrom(statuses, download.Id).ToObservable().Publish(initialValue: new CollectionDownloadStatus(new CollectionDownloadStatus.NotDownloaded())).RefCount();
         var downloadJobStatusObservable = GetJobStatusObservable<ExternalDownloadJob>(job => job.ExpectedMd5 == download.Md5);
 
         var baseShouldAddDownloadObservable = ShouldAddObservable(
@@ -182,14 +196,15 @@ public class CollectionDataProvider
 
     private CompositeItemModel<EntityId> ToItemModel(
         CollectionDownloadBundled.ReadOnly download,
-        IObservable<Optional<CollectionGroup.ReadOnly>> groupObservable)
+        IObservable<Optional<CollectionGroup.ReadOnly>> groupObservable,
+        IObservable<IReadOnlyDictionary<EntityId, CollectionDownloadStatus>> statuses)
     {
         var itemModel = new CompositeItemModel<EntityId>(download.Id);
 
         itemModel.Add(SharedColumns.Name.NameComponentKey, new NameComponent(value: download.AsCollectionDownload().Name));
         itemModel.Add(SharedColumns.Name.ImageComponentKey, new ImageComponent(value: ImagePipelines.ModPageThumbnailFallback));
 
-        var statusObservable = _collectionDownloader.GetStatusObservable(download.AsCollectionDownload(), groupObservable).ToObservable();
+        var statusObservable = StatusFrom(statuses, download.Id).ToObservable();
         AddInstallAction(itemModel, download.AsCollectionDownload(), statusObservable, groupObservable.ToObservable());
 
         return itemModel;

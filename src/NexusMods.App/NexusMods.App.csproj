@@ -119,12 +119,14 @@
         <Move SourceFiles="$(PublishDir)NexusMods.App.exe" DestinationFiles="$(PublishDir)Afterburn.exe" Condition="Exists('$(PublishDir)NexusMods.App.exe')" />
     </Target>
 
-    <!-- Lighter and faster: no extra GC threads, trim memory, skip other-language resources of dependencies. -->
+    <!-- Afterburn: background (concurrent) garbage collection keeps the UI smooth. With it turned off, and with
+         ConserveMemory forcing extra compacting collections, every full collection paused the whole app for
+         0.1 to 1.6 seconds once a large mod list was loaded, which showed up as stutter. Server mode spreads each
+         collection over all CPU cores, so the remaining short pauses (for example while applying) are much shorter;
+         .NET 9 sizes its memory use to the app's actual needs (DATAS), so it stays modest. -->
     <PropertyGroup>
-        <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
-        <ServerGarbageCollector>false</ServerGarbageCollector>
+        <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+        <ServerGarbageCollector>true</ServerGarbageCollector>
+        <RetainVMGarbageCollection>true</RetainVMGarbageCollection>
     </PropertyGroup>
-    <ItemGroup>
-        <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
-    </ItemGroup>
 </Project>

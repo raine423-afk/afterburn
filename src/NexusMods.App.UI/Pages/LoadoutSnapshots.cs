@@ -95,10 +95,35 @@ public static class LoadoutSnapshots
             ? $"{filter.LoadoutId.Value}/{filter.CollectionGroupId.Value.Value}"
             : $"{filter.LoadoutId.Value}";
 
-    /// <summary>Live snapshots for the filter: one shared database subscription per filter.</summary>
+    private static readonly ConcurrentDictionary<string, IObservable<BaseEntry[]>> SharedBase = new();
+
+    private enum Kind : byte { NexusModPage, LocalFile, ManualArchive }
+
+    /// <summary>One installed mod of a loadout with everything the per-page filters need.</summary>
+    private readonly record struct BaseEntry(SnapshotItem Item, Kind Kind, EntityId Key, EntityId[] Ancestors);
+
+    /// <summary>Live snapshots for the filter. All filters of one loadout share a single database read.</summary>
     public static IObservable<LoadoutSnapshot> Observe(IConnection connection, LoadoutFilter filter)
     {
         return Shared.GetOrAdd(Key(filter), _ =>
+        {
+            // Afterburn: every list (All, My Mods, each collection) and every count in the left menu used to read the
+            // whole loadout on its own after each database change. Now one read per loadout is shared and each page
+            // only filters it, which is cheap.
+            var collectionGroupId = filter.CollectionGroupId.HasValue
+                ? filter.CollectionGroupId.Value.Value
+                : Optional<EntityId>.None;
+
+            return ObserveBase(connection, filter.LoadoutId)
+                .Select(entries => FromEntries(entries, collectionGroupId))
+                .Replay(1)
+                .RefCount();
+        });
+    }
+
+    private static IObservable<BaseEntry[]> ObserveBase(IConnection connection, LoadoutId loadoutId)
+    {
+        return SharedBase.GetOrAdd($"{loadoutId.Value}", _ =>
         {
             // Anything that can change which mods are installed, which mod page they belong to, or whether they (or
             // their collection) are enabled or required.
@@ -112,7 +137,7 @@ public static class LoadoutSnapshots
             return changes
                 .StartWith(0)
                 .Throttle(Coalesce, TaskPoolScheduler.Default)
-                .Select(_ => Build(connection.Db, filter))
+                .Select(_ => BuildBase(connection.Db, loadoutId))
                 .Replay(1)
                 .RefCount();
         });
@@ -121,16 +146,22 @@ public static class LoadoutSnapshots
     /// <summary>Reads the snapshot from a database revision.</summary>
     public static LoadoutSnapshot Build(IDb db, LoadoutFilter filter)
     {
-        var byModPage = new Dictionary<EntityId, List<SnapshotItem>>();
-        var byLocal = new Dictionary<EntityId, List<SnapshotItem>>();
-        var byManual = new Dictionary<EntityId, List<SnapshotItem>>();
+        var collectionGroupId = filter.CollectionGroupId.HasValue
+            ? filter.CollectionGroupId.Value.Value
+            : Optional<EntityId>.None;
+        return FromEntries(BuildBase(db, filter.LoadoutId), collectionGroupId);
+    }
+
+    private static BaseEntry[] BuildBase(IDb db, LoadoutId loadoutId)
+    {
+        var entries = new List<BaseEntry>();
+        var ancestors = new List<EntityId>();
 
         foreach (var linked in LibraryLinkedLoadoutItem.All(db))
         {
             var item = LoadoutItem.Load(db, linked.Id);
             if (!item.IsValid()) continue;
-            if (!item.LoadoutId.Equals(filter.LoadoutId)) continue;
-            if (filter.CollectionGroupId.HasValue && !item.IsChildOf(filter.CollectionGroupId.Value)) continue;
+            if (!item.LoadoutId.Equals(loadoutId)) continue;
 
             var isInCollection = false;
             var isParentCollectionDisabled = false;
@@ -149,21 +180,21 @@ public static class LoadoutSnapshots
                 ParentId: item.HasParent() ? item.ParentId.Value : default
             );
 
-            Dictionary<EntityId, List<SnapshotItem>> target;
+            Kind kind;
             EntityId key;
             if (linked.LibraryItem.TryGetAsNexusModsLibraryItem(out var nexusItem))
             {
-                target = byModPage;
+                kind = Kind.NexusModPage;
                 key = nexusItem.ModPageMetadata.Id;
             }
             else if (LocalFile.Load(db, linked.LibraryItem.Id).IsValid())
             {
-                target = byLocal;
+                kind = Kind.LocalFile;
                 key = linked.LibraryItem.Id;
             }
             else if (ManuallyCreatedArchive.Load(db, linked.LibraryItem.Id).IsValid())
             {
-                target = byManual;
+                kind = Kind.ManualArchive;
                 key = linked.LibraryItem.Id;
             }
             else
@@ -171,8 +202,41 @@ public static class LoadoutSnapshots
                 continue;
             }
 
-            if (!target.TryGetValue(key, out var list)) target[key] = list = [];
-            list.Add(snapshotItem);
+            // The same walk as LoadoutItemExtensions.IsChildOf, done once so filters don't repeat it.
+            ancestors.Clear();
+            var current = item;
+            while (current.Contains(LoadoutItem.Parent))
+            {
+                var parent = current.Parent;
+                ancestors.Add(parent.Id);
+                current = parent.AsLoadoutItem();
+            }
+
+            entries.Add(new BaseEntry(snapshotItem, kind, key, ancestors.ToArray()));
+        }
+
+        return entries.ToArray();
+    }
+
+    private static LoadoutSnapshot FromEntries(BaseEntry[] entries, Optional<EntityId> collectionGroupId)
+    {
+        var byModPage = new Dictionary<EntityId, List<SnapshotItem>>();
+        var byLocal = new Dictionary<EntityId, List<SnapshotItem>>();
+        var byManual = new Dictionary<EntityId, List<SnapshotItem>>();
+
+        foreach (var entry in entries)
+        {
+            if (collectionGroupId.HasValue && Array.IndexOf(entry.Ancestors, collectionGroupId.Value) < 0) continue;
+
+            var target = entry.Kind switch
+            {
+                Kind.NexusModPage => byModPage,
+                Kind.LocalFile => byLocal,
+                _ => byManual,
+            };
+
+            if (!target.TryGetValue(entry.Key, out var list)) target[entry.Key] = list = [];
+            list.Add(entry.Item);
         }
 
         return new LoadoutSnapshot(Freeze(byModPage), Freeze(byLocal), Freeze(byManual));

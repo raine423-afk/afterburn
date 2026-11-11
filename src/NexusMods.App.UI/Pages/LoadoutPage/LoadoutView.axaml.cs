@@ -40,7 +40,10 @@ public partial class LoadoutView : R3UserControl<ILoadoutViewModel>
                 BindableViewModel.Subscribe(this, static (vm, view) =>
                     {
                         view.EmptyState.Header = vm?.EmptyStateTitleText ?? string.Empty;
-                        view.SortingSelectionView.ViewModel = vm?.RulesSectionViewModel;
+                        // Afterburn: only build the Rules tab once it's shown.
+                        view.SortingSelectionView.ViewModel = null;
+                        if (vm is not null && vm.HasRulesSection && ReferenceEquals(view.RulesTabControl.SelectedItem, view.RulesTabItem))
+                            view.SortingSelectionView.ViewModel = vm.RulesSectionViewModel;
                         view.RulesTabItem.IsVisible = vm?.HasRulesSection ?? false;
 
                         var isCollection = vm?.IsCollection ?? true;
@@ -64,8 +67,24 @@ public partial class LoadoutView : R3UserControl<ILoadoutViewModel>
                                 _ => throw new ArgumentOutOfRangeException(nameof(selectedSubTab), selectedSubTab, null)
                             };
                         }
+
+                        if (vm is not null && vm.HasRulesSection && ReferenceEquals(view.RulesTabControl.SelectedItem, view.RulesTabItem))
+                            view.SortingSelectionView.ViewModel = vm.RulesSectionViewModel;
                     }
                 ).AddTo(disposables);
+
+                // Afterburn: build the Rules tab the first time it is selected.
+                Observable.FromEventHandler<SelectionChangedEventArgs>(
+                        addHandler: handler => RulesTabControl.SelectionChanged += handler,
+                        removeHandler: handler => RulesTabControl.SelectionChanged -= handler)
+                    .Subscribe(this, static (_, view) =>
+                    {
+                        var vm = view.ViewModel;
+                        if (vm is null || !vm.HasRulesSection) return;
+                        if (!ReferenceEquals(view.RulesTabControl.SelectedItem, view.RulesTabItem)) return;
+                        if (view.SortingSelectionView.ViewModel is null) view.SortingSelectionView.ViewModel = vm.RulesSectionViewModel;
+                    })
+                    .AddTo(disposables);
 
                 this.BindCommand(ViewModel, vm => vm.CommandOpenFilesPage, view => view.ViewFilesButton)
                     .AddTo(disposables);

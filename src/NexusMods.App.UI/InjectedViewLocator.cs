@@ -13,6 +13,10 @@ public class InjectedViewLocator : IViewLocator
     private readonly MethodInfo _resolveViewInnerMethod;
     private readonly ILogger<InjectedViewLocator> _logger;
 
+    // Afterburn: pages keep their screen while they're kept alive (see WorkspaceViewModel's recent pages), so
+    // switching back to a page doesn't build and lay out its whole screen again.
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, IViewFor> _pageViews = new();
+
     public InjectedViewLocator(ILogger<InjectedViewLocator> logger, IServiceProvider provider)
     {
         _logger = logger;
@@ -29,6 +33,14 @@ public class InjectedViewLocator : IViewLocator
         _logger.FindingView(viewModel.GetType().FullName ?? viewModel.GetType().ToString());
         try
         {
+            if (viewModel is WorkspaceSystem.IPageViewModelInterface
+                && _pageViews.TryGetValue(viewModel, out var cachedView)
+                && cachedView is Avalonia.Controls.Control { Parent: null }
+                && contract is null)
+            {
+                return cachedView;
+            }
+
             if (viewModel is IViewModel vm)
             {
                 var intType = vm.ViewModelInterface;
@@ -38,6 +50,12 @@ public class InjectedViewLocator : IViewLocator
                 {
                     vc.ViewContract = contract;
                 }
+
+                if (view is not null && contract is null && viewModel is WorkspaceSystem.IPageViewModelInterface)
+                {
+                    _pageViews.AddOrUpdate(viewModel, view);
+                }
+
                 return view;
             }
             _logger.LogError("Failed to resolve view for {ViewModel}", typeof(T).FullName);

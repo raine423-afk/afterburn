@@ -185,41 +185,21 @@
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
                                                RenderTransformOrigin="50%,50%"
-                                               Size="20">
-                                <icons:UnifiedIcon.RenderTransform>
-                                    <RotateTransform />
-                                </icons:UnifiedIcon.RenderTransform>
-                            </icons:UnifiedIcon>
+                                               Size="20" />
                         </Border>
                     </Grid>
                 </Border>
             </ControlTemplate>
         </Setter>
 
+        <!-- Afterburn: no animations; the chevron flips straight to its new position. -->
         <Style Selector="^[Tag=expanded] /template/ icons|UnifiedIcon#ExpandCollapseChevron">
-            <Style.Animations>
-                <Animation FillMode="Both" Duration="0:0:0.0625">
-                    <KeyFrame Cue="0%">
-                        <Setter Property="RotateTransform.Angle" Value="0" />
-                    </KeyFrame>
-                    <KeyFrame Cue="100%">
-                        <Setter Property="RotateTransform.Angle" Value="180" />
-                    </KeyFrame>
-                </Animation>
-            </Style.Animations>
+            <Setter Property="RenderTransform" Value="rotate(180deg)" />
         </Style>
 
+        <!-- Afterburn: no animations; the chevron flips straight to its new position. -->
         <Style Selector="^[Tag=collapsed] /template/ icons|UnifiedIcon#ExpandCollapseChevron">
-            <Style.Animations>
-                <Animation FillMode="Both" Duration="0:0:0.0625">
-                    <KeyFrame Cue="0%">
-                        <Setter Property="RotateTransform.Angle" Value="180" />
-                    </KeyFrame>
-                    <KeyFrame Cue="100%">
-                        <Setter Property="RotateTransform.Angle" Value="0" />
-                    </KeyFrame>
-                </Animation>
-            </Style.Animations>
+            <Setter Property="RenderTransform" Value="rotate(0deg)" />
         </Style>
 
         <Style Selector="^ /template/ Border#ExpandCollapseChevronBorder">

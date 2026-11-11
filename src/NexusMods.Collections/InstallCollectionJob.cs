@@ -160,6 +160,7 @@ public class InstallCollectionJob : IJobDefinitionWithStart<InstallCollectionJob
             .IsInstalled(out _));
         {
             await LoadoutManager.ApplyCollectionDownloadRules(collectionGroup);
+            await LoadoutManager.AutoResolveFileConflicts(TargetLoadout);
 
             using var tx = Connection.BeginTransaction();
 

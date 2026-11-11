@@ -84,11 +84,8 @@ public abstract class TreeDataGridAdapter<TModel, TKey> : ReactiveR3Object, ISea
                 if (model.IsDisposed) return;
 
                 // NOTE(erri120): This is only necessary for child rows since root rows are handled directly.
-                if (isActivating && !model.IsActivated)
-                {
-                    self.BeforeModelActivationHook(model);
-                    model.Activate();
-                }
+                // Afterburn: with lazy rows this also builds root rows as they come on screen.
+                if (isActivating) self.ActivateIfNeeded(model);
             }).AddTo(disposables);
 
             self.ViewHierarchical
@@ -102,6 +99,8 @@ public abstract class TreeDataGridAdapter<TModel, TKey> : ReactiveR3Object, ISea
                     }
 
                     self.Roots.Clear();
+                    self._pendingActivation.Clear();
+                    self._activationGeneration++;
 
                     var (source, selection, selectionObservable, selectionResetObservable) = self.CreateSource(self.RootsCollectionChangedView, createHierarchicalSource: viewHierarchical);
                     self._selectionModel = selection;
@@ -126,6 +125,13 @@ public abstract class TreeDataGridAdapter<TModel, TKey> : ReactiveR3Object, ISea
                             if (item.IsDisposed) continue;
                             
                             item.IsSelected.Value = false;
+                        }
+
+                        // Afterburn: build selected rows that haven't been shown yet, so bulk actions see their data.
+                        foreach (var item in eventArgs.SelectedItems)
+                        {
+                            if (item is null || item.IsDisposed) continue;
+                            self.ActivateIfNeeded(item);
                         }
 
                         self.SelectedModels.AddRange(eventArgs.SelectedItems.NotNull());
@@ -158,7 +164,7 @@ public abstract class TreeDataGridAdapter<TModel, TKey> : ReactiveR3Object, ISea
 
                     return DynamicData.ObservableCacheEx
                         .Batch(roots, TimeSpan.FromMilliseconds(150))
-                        .SelectMany(static changeSet => SplitChangeSet(changeSet, ChunkSize))
+                        .SelectMany(changeSet => SplitChangeSet(changeSet, self.ActivateRowsLazily ? LazyChunkSize : ChunkSize))
                         .ObserveOn(BackgroundUiScheduler.Instance)
                         .Do(changeSet =>
                         {
@@ -171,8 +177,10 @@ public abstract class TreeDataGridAdapter<TModel, TKey> : ReactiveR3Object, ISea
                                     Debug.Assert(!change.Current.IsDisposed);
                                     if (change.Current.IsDisposed) continue;
 
-                                    self.BeforeModelActivationHook(change.Current);
-                                    change.Current.Activate();
+                                    // Afterburn: lazy lists build rows when they come on screen, or later when the app is
+                                    // idle, instead of all at once (see QueueIdleActivation).
+                                    if (self.ActivateRowsLazily) self.QueueIdleActivation(change.Current);
+                                    else self.ActivateIfNeeded(change.Current);
                                 }
                             }
 
@@ -226,6 +234,11 @@ public abstract class TreeDataGridAdapter<TModel, TKey> : ReactiveR3Object, ISea
                 // a page with thousands of rows doesn't freeze the window.
                 var rows = self.Roots.ToArray();
                 self.Roots.Clear();
+
+                // Afterburn: rows that were waiting to be built belong to this page too; never build them now.
+                self._pendingActivation.Clear();
+                self._activationGeneration++;
+
                 if (rows.Length == 0) return;
 
                 _ = Task.Run(() =>
@@ -240,7 +253,71 @@ public abstract class TreeDataGridAdapter<TModel, TKey> : ReactiveR3Object, ISea
         });
     }
 
-    private const int ChunkSize = 100;
+    // Afterburn: small enough that one chunk takes only a few hundredths of a second on the UI thread, so scrolling
+    // and clicks stay smooth while a big list fills in. Each chunk runs in its own low-priority dispatcher turn.
+    private const int ChunkSize = 10;
+
+    // Afterburn: adding rows that aren't built yet is cheap, so lazy lists can take bigger steps.
+    private const int LazyChunkSize = 100;
+
+    /// <summary>
+    /// Afterburn: when true, root rows are not built when they are added. Rows on screen are built right away (the view
+    /// reports them through <see cref="ModelActivationSubject"/>), selected rows and searches build what they need,
+    /// and everything else is built a few milliseconds at a time while the app is idle. Opening a page with thousands
+    /// of mods then costs about as much as the ~20 rows you can see.
+    /// </summary>
+    protected virtual bool ActivateRowsLazily => false;
+
+    private readonly Queue<TModel> _pendingActivation = new();
+    private bool _idleActivationScheduled;
+
+    private int _activationGeneration;
+
+    private void ActivateIfNeeded(TModel model)
+    {
+        if (model.IsDisposed || model.IsActivated) return;
+        try
+        {
+            BeforeModelActivationHook(model);
+            model.Activate();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The row (or one of its parts) was released while waiting to be built, for example because the page was
+            // closed. There is nothing to show, so skip it.
+        }
+    }
+
+    private void QueueIdleActivation(TModel model)
+    {
+        _pendingActivation.Enqueue(model);
+        if (_idleActivationScheduled) return;
+        _idleActivationScheduled = true;
+        Avalonia.Threading.Dispatcher.UIThread.Post(RunIdleActivation, Avalonia.Threading.DispatcherPriority.ContextIdle);
+    }
+
+    private void RunIdleActivation()
+    {
+        _idleActivationScheduled = false;
+        if (_isDisposed) { _pendingActivation.Clear(); return; }
+        var generation = _activationGeneration;
+
+        // Work for at most ~6 ms per turn, then give input and drawing a chance before continuing.
+        var started = Stopwatch.GetTimestamp();
+        while (_pendingActivation.Count > 0 && generation == _activationGeneration && Stopwatch.GetElapsedTime(started).TotalMilliseconds < 6)
+        {
+            ActivateIfNeeded(_pendingActivation.Dequeue());
+        }
+
+        if (_pendingActivation.Count == 0) return;
+        _idleActivationScheduled = true;
+        Avalonia.Threading.Dispatcher.UIThread.Post(RunIdleActivation, Avalonia.Threading.DispatcherPriority.ContextIdle);
+    }
+
+    private void ActivateAllPending()
+    {
+        while (_pendingActivation.Count > 0) ActivateIfNeeded(_pendingActivation.Dequeue());
+    }
 
     /// <summary>
     /// When true, the row source is subscribed to on a background thread so building rows never blocks the UI.
@@ -462,6 +539,10 @@ public abstract class TreeDataGridAdapter<TModel, TKey> : ReactiveR3Object, ISea
         RootsView.ResetFilter();
 
         if (filter is NoFilter) return;
+
+        // Afterburn: a search must see every row's values, so build any rows that haven't been built yet.
+        ActivateAllPending();
+
         if (typeof(TModel) != typeof(CompositeItemModel<TKey>)) throw new NotSupportedException($"Filtering is only supported on composite item models and not {typeof(TModel)}");
 
         var filterInstance = new SynchronizedViewFilter<TModel, TModel>((model, _) => 

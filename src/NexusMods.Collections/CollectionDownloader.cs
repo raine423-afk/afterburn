@@ -204,14 +204,25 @@ public class CollectionDownloader
     /// </summary>
     public IObservable<int> DownloadedItemCountObservable(CollectionRevisionMetadata.ReadOnly revisionMetadata, ItemType itemType)
     {
-        return _connection
-            .ObserveDatoms(CollectionDownload.CollectionRevision, revisionMetadata)
-            .AsEntityIds()
-            .Transform(datom => CollectionDownload.Load(_connection.Db, datom.E))
-            .FilterImmutable(download => DownloadMatchesItemType(download, itemType))
-            .TransformOnObservable(download => GetStatusObservable(download, Observable.Return(Optional<CollectionGroup.ReadOnly>.None)))
-            .FilterImmutable(static status => status.IsDownloaded() && !status.IsBundled())
-            .QueryWhenChanged(query => query.Count)
+        // Afterburn: count in one background pass when something changes, instead of a database watcher per file.
+        var downloads = revisionMetadata.Downloads
+            .Where(download => DownloadMatchesItemType(download, itemType))
+            .ToArray();
+
+        return Coalesce(StatusChanges())
+            .Select(_ =>
+            {
+                var db = _connection.Db;
+                var count = 0;
+                foreach (var download in downloads)
+                {
+                    var status = GetStatus(download, Optional<CollectionGroup.ReadOnly>.None, db);
+                    if (status.IsDownloaded() && !status.IsBundled()) count++;
+                }
+
+                return count;
+            })
+            .DistinctUntilChanged()
             .Prepend(0);
     }
 
@@ -285,13 +296,68 @@ public class CollectionDownloader
         IObservable<Optional<CollectionGroup.ReadOnly>> groupObservable, 
         ItemType itemType = ItemType.Required)
     {
-        var observables = revision.Downloads
+        var downloads = revision.Downloads
             .Where(download => DownloadMatchesItemType(download, itemType))
-            .Select(download => GetStatusObservable(download, groupObservable).Select(static status => status.IsInstalled(out _)))
             .ToArray();
 
-        if (observables.Length == 0) return groupObservable.Select(static optional => optional.HasValue);
-        return observables.CombineLatest(static list => list.All(static installed => installed));
+        if (downloads.Length == 0) return groupObservable.Select(static optional => optional.HasValue);
+
+        // Afterburn: this used to create a live database watcher for every file of the collection (thousands for a big
+        // collection, and it is asked several times at startup), and all of them re-checked after every change. Now a
+        // few whole-attribute watchers trigger one background re-check, at most a few times a second.
+        return Coalesce(groupObservable.CombineLatest(StatusChanges(), static (group, _) => group))
+            .Select(group => IsFullyInstalled(downloads, group, _connection.Db))
+            .DistinctUntilChanged();
+    }
+
+    /// <summary>
+    /// Afterburn: the status of every download of a revision, recomputed in the background when anything that can
+    /// change a status changes. One of these is shared by all rows of a collection page instead of each row keeping
+    /// its own database watchers.
+    /// </summary>
+    public IObservable<IReadOnlyDictionary<EntityId, CollectionDownloadStatus>> ObserveAllStatuses(
+        CollectionRevisionMetadata.ReadOnly revision,
+        IObservable<Optional<CollectionGroup.ReadOnly>> groupObservable)
+    {
+        var downloads = revision.Downloads.ToArray();
+
+        return Coalesce(groupObservable.CombineLatest(StatusChanges(), static (group, _) => group))
+            .Select(group =>
+            {
+                var db = _connection.Db;
+                var result = new Dictionary<EntityId, CollectionDownloadStatus>(downloads.Length);
+                foreach (var download in downloads)
+                {
+                    result[download.Id] = GetStatus(download, group, db);
+                }
+
+                return (IReadOnlyDictionary<EntityId, CollectionDownloadStatus>)result;
+            })
+            .Replay(1)
+            .RefCount();
+    }
+
+    /// <summary>Fires when anything that can change a collection download's status changes.</summary>
+    private IObservable<int> StatusChanges()
+    {
+        return System.Reactive.Linq.Observable.Merge(
+            _connection.ObserveDatoms(SliceDescriptor.Create(_connection.AttributeCache.GetAttributeId(NexusModsLibraryItem.FileMetadata.Id))).Select(static _ => 0),
+            _connection.ObserveDatoms(SliceDescriptor.Create(_connection.AttributeCache.GetAttributeId(LibraryFile.Md5.Id))).Select(static _ => 0),
+            _connection.ObserveDatoms(SliceDescriptor.Create(_connection.AttributeCache.GetAttributeId(NexusCollectionBundledLoadoutGroup.BundleDownload.Id))).Select(static _ => 0),
+            _connection.ObserveDatoms(SliceDescriptor.Create(_connection.AttributeCache.GetAttributeId(LibraryLinkedLoadoutItem.LibraryItem.Id))).Select(static _ => 0),
+            _connection.ObserveDatoms(SliceDescriptor.Create(_connection.AttributeCache.GetAttributeId(LoadoutItem.Parent.Id))).Select(static _ => 0)
+        ).StartWith(0);
+    }
+
+    /// <summary>
+    /// The first value right away (on the caller's thread, so a menu or page can show the answer on its first draw),
+    /// then, on a background thread, at most one value every 250 ms while changes keep
+    /// coming in, so a burst of database writes during an install causes one re-check instead of hundreds.
+    /// </summary>
+    private static IObservable<T> Coalesce<T>(IObservable<T> source)
+    {
+        return source
+            .Publish(shared => shared.Take(1).Merge(shared.Skip(1).Throttle(TimeSpan.FromMilliseconds(250), System.Reactive.Concurrency.TaskPoolScheduler.Default)));
     }
 
     /// <summary>

@@ -15,11 +15,6 @@
             Background="{StaticResource BrandNeutral600}"
             CornerRadius="999" 
             Opacity="0">
-        <Border.Transitions>
-            <Transitions>
-                <DoubleTransition Property="Opacity" Duration="0:0:0.2"/>
-            </Transitions>
-        </Border.Transitions>
     </Border>
 
 </reactive:ReactiveUserControl>

@@ -27,7 +27,7 @@ public class DateComponent : ReactiveR3Object, IItemModelComponent<DateComponent
 
             _activationDisposable = this.WhenActivated(valueObservable, static (self, valueObservable, disposables) =>
             {
-                valueObservable.ObserveOnUIThreadDispatcher().CombineLatest(Tickers.Primary, static (value, now) => (value, now)).Subscribe(self, static (tuple, self) =>
+                valueObservable.ObserveOnUIThreadIfNeeded().CombineLatest(Tickers.Primary, static (value, now) => (value, now)).Subscribe(self, static (tuple, self) =>
                 {
                     var (value, now) = tuple;
                     self.Value.Value = value;

@@ -36,6 +36,7 @@ public class LoadoutTreeDataGridAdapter :
     }
 
     protected override bool BuildRowsInBackground => true;
+    protected override bool ActivateRowsLazily => true;
 
     protected override IObservable<IChangeSet<CompositeItemModel<EntityId>, EntityId>> GetRootsObservable(bool viewHierarchical)
     {

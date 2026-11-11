@@ -17,19 +17,7 @@
     <Style Selector="spinner|Spinner">
         <Setter Property="Foreground" Value="{StaticResource PrimaryModerateBrush}" />
         
-        <Style Selector="^ Path">
-            <Style.Animations>
-                <Animation Duration="0:0:1.2" IterationCount="INFINITE">
-                    <KeyFrame Cue="0%">
-                        <Setter Property="RotateTransform.Angle" Value="0"/>
-                    </KeyFrame>
-                    <KeyFrame Cue="100%">
-                        <Setter Property="RotateTransform.Angle" Value="360"/>
-                    </KeyFrame>
-                </Animation>
-            </Style.Animations>
-        </Style>
-        
+        <!-- Afterburn: no spinning animation (it redrew the window every frame while anything was loading). -->
     </Style>
     
 </Styles>

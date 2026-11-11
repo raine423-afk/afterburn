@@ -48,7 +48,7 @@ public abstract class AFormattedValueComponent<T> : ReactiveR3Object, IItemModel
 
             _activationDisposable = this.WhenActivated(valueObservable, static (self, valueObservable, disposables) =>
             {
-                valueObservable.ObserveOnUIThreadDispatcher().Subscribe(self, static (value, self) =>
+                valueObservable.ObserveOnUIThreadIfNeeded().Subscribe(self, static (value, self) =>
                 {
                     self.Value.Value = value;
                     self.FormattedValue.Value = self.FormatValue(value);

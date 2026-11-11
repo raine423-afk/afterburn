@@ -419,6 +419,20 @@ public class WorkspaceViewModel : AViewModel<IWorkspaceViewModel>, IWorkspaceVie
 
         // Replace the tab contents
 
+        // Afterburn: reuse a page this tab showed recently (for example switching between My Mods and a collection)
+        // instead of building the page and its screen again from scratch.
+        var outgoing = tab.Contents;
+        if (TryTakeRecentPage(tab.Id, pageData, out var recentPage))
+        {
+            RememberRecentPage(tab.Id, outgoing);
+            tab.Header.Icon = recentPage.ViewModel.TabIcon;
+            tab.Header.Title = recentPage.ViewModel.TabTitle;
+            tab.Contents = recentPage;
+            if (selectTab) panel.SelectTab(tab.Id);
+            panel.SelectTab(tab.Id);
+            return;
+        }
+
         Page newTabPage;
 
         try
@@ -436,11 +450,37 @@ public class WorkspaceViewModel : AViewModel<IWorkspaceViewModel>, IWorkspaceVie
         tab.Header.Icon = newTabPage.ViewModel.TabIcon;
         tab.Header.Title = newTabPage.ViewModel.TabTitle;
 
+        RememberRecentPage(tab.Id, outgoing);
         tab.Contents = newTabPage;
 
         if (selectTab) panel.SelectTab(tab.Id);
         panel.SelectTab(tab.Id);
     }
+
+    private const int RecentPagesPerTab = 4;
+    private readonly Dictionary<PanelTabId, List<Page>> _recentPages = new();
+
+    private void RememberRecentPage(PanelTabId tabId, Page page)
+    {
+        if (!_recentPages.TryGetValue(tabId, out var list)) _recentPages[tabId] = list = new List<Page>(RecentPagesPerTab);
+        list.RemoveAll(p => ReferenceEquals(p, page) || SamePage(p.PageData, page.PageData));
+        list.Insert(0, page);
+        if (list.Count > RecentPagesPerTab) list.RemoveRange(RecentPagesPerTab, list.Count - RecentPagesPerTab);
+    }
+
+    private bool TryTakeRecentPage(PanelTabId tabId, PageData pageData, out Page page)
+    {
+        page = null!;
+        if (!_recentPages.TryGetValue(tabId, out var list)) return false;
+        var index = list.FindIndex(p => SamePage(p.PageData, pageData));
+        if (index < 0) return false;
+        page = list[index];
+        list.RemoveAt(index);
+        return true;
+    }
+
+    private static bool SamePage(PageData a, PageData b) =>
+        a.FactoryId == b.FactoryId && a.Context.Equals(b.Context);
 
     private void OpenPageInNewTab(PageData pageData, OpenPageBehavior.NewTab newTab)
     {

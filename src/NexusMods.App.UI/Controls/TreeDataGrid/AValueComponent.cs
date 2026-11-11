@@ -41,7 +41,7 @@ public abstract class AValueComponent<T> : ReactiveR3Object, IItemModelComponent
 
             _activationDisposable = this.WhenActivated(valueObservable, static (self, valueObservable, disposables) =>
             {
-                valueObservable.ObserveOnUIThreadDispatcher().Subscribe(self, static (value, self) =>
+                valueObservable.ObserveOnUIThreadIfNeeded().Subscribe(self, static (value, self) =>
                 {
                     self.Value.Value = value;
                 }).AddTo(disposables);
@@ -50,7 +50,7 @@ public abstract class AValueComponent<T> : ReactiveR3Object, IItemModelComponent
         else
         {
             Value = !observeOutsideUiThread 
-                ? valueObservable.ObserveOnUIThreadDispatcher().ToBindableReactiveProperty(initialValue: initialValue) 
+                ? valueObservable.ObserveOnUIThreadIfNeeded().ToBindableReactiveProperty(initialValue: initialValue) 
                 : valueObservable.ToBindableReactiveProperty(initialValue: initialValue); // Testing/Debug only.
         }
     }

@@ -105,37 +105,40 @@ public static class LibraryDataProviderHelper
         IObservable<IChangeSet<LoadoutItem.ReadOnly, EntityId>> linkedLoadoutItemsObservable,
         IObservable<IChangeSet<CollectionMetadata.ReadOnly, EntityId>> relatedDownloadedCollectionsObservable)
     {
-        var downloadedNamesObservable = relatedDownloadedCollectionsObservable
-            .Distinct()
-            .Transform(collection => collection.Name)
-            .SortBy(static name => name)
-            .RemoveKey()
-            .StartWithEmpty();
-        
-        var installedCollectionsObservable = linkedLoadoutItemsObservable
-            .Transform(item => item.Parent.AsLoadoutItem())
-            .ChangeKey(coll => coll.Id)
-            .Distinct()
-            .Transform(collection => collection.Name)
-            .SortBy(static name => name)
-            .RemoveKey()
-            .StartWithEmpty();
+        // Afterburn: work the names out once per change and share them. The old version built about nine separate
+        // sorting/filtering pipelines for every row, which made the Library slow to fill.
+        var installedNames = linkedLoadoutItemsObservable
+            .QueryWhenChanged(static query => query.Items
+                .Select(static item => item.Parent.AsLoadoutItem())
+                .DistinctBy(static collection => collection.Id)
+                .Select(static collection => collection.Name)
+                .Order()
+                .ToArray())
+            .StartWith(new[] { Array.Empty<string>() });
 
-        // Only take downloaded entries that are not already installed
-        var filteredDownloadedCollectionsObservable = downloadedNamesObservable.Except(installedCollectionsObservable);
+        var downloadedNames = relatedDownloadedCollectionsObservable
+            .QueryWhenChanged(static query => query.Items
+                .DistinctBy(static collection => collection.Id)
+                .Select(static collection => collection.Name)
+                .Order()
+                .ToArray())
+            .StartWith(new[] { Array.Empty<string>() });
 
-        var hasCollectionsObservable = installedCollectionsObservable.IsEmpty()
-            .CombineLatest(filteredDownloadedCollectionsObservable.IsEmpty(), 
-                (installedIsEmpty, relatedIsEmpty) => !installedIsEmpty || !relatedIsEmpty)
+        // Only show downloaded collections that are not already installed.
+        var names = installedNames
+            .CombineLatest(downloadedNames, static (installed, downloaded) => new CollectionNames(installed, downloaded.Except(installed).ToArray()))
+            .DistinctUntilChanged()
+            .Replay(1)
+            .RefCount();
+
+        var hasCollectionsObservable = names
+            .Select(static x => x.Installed.Length > 0 || x.Downloaded.Length > 0)
             .DistinctUntilChanged()
             .ToObservable();
 
         itemModel.AddObservable(LibraryColumns.Collections.RelatedCollectionsComponentKey,
             hasCollectionsObservable,
-            componentFactory: () => new LibraryComponents.RelatedCollectionsComponent(
-                installedCollectionsObservable,
-                filteredDownloadedCollectionsObservable
-            )
+            componentFactory: () => new LibraryComponents.RelatedCollectionsComponent(names)
         );
     }
 
@@ -299,4 +302,13 @@ public static class LibraryDataProviderHelper
         
         itemModel.Add(LibraryColumns.Actions.HideUpdatesComponentKey, new LibraryComponents.HideUpdatesAction(isHiddenObservable, itemCountObservable, isEnabledObservable, isVisibleObservable));
     }
+}
+
+/// <summary>Afterburn: installed and downloaded collection names shown in the Library's Collections column.</summary>
+public sealed record CollectionNames(string[] Installed, string[] Downloaded)
+{
+    public bool Equals(CollectionNames? other) =>
+        other is not null && Installed.SequenceEqual(other.Installed) && Downloaded.SequenceEqual(other.Downloaded);
+
+    public override int GetHashCode() => HashCode.Combine(Installed.Length, Downloaded.Length);
 }

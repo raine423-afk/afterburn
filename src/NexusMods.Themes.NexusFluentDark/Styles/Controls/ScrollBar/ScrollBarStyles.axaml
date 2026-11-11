@@ -55,12 +55,6 @@
 
         <Style Selector="^ /template/ Thumb">
             <Setter Property="CornerRadius" Value="1" />
-            <Setter Property="Transitions">
-                <Transitions>
-                    <CornerRadiusTransition Property="CornerRadius" Duration="0:0:0.05" />
-                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.05" />
-                </Transitions>
-            </Setter>
         </Style>
 
         <Style Selector="^[IsExpanded=true]">

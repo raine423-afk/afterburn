@@ -890,6 +890,7 @@ After asking design, we're choosing to simply open the mod page for now.
         try
         {
             await _loadoutManager.InstallItem(libraryItem, loadout, parent: targetLoadoutGroup, installer: useAdvancedInstaller ? _advancedInstaller : null);
+            await _loadoutManager.AutoResolveFileConflicts(loadout);
             var targetCollection  = LoadoutItem.Load(_connection.Db, targetLoadoutGroup);
         }
         catch (OperationCanceledException)
@@ -1158,6 +1159,7 @@ public class LibraryTreeDataGridAdapter :
     }
 
     protected override bool BuildRowsInBackground => true;
+    protected override bool ActivateRowsLazily => true;
 
     protected override IObservable<IChangeSet<CompositeItemModel<EntityId>, EntityId>> GetRootsObservable(bool viewHierarchical)
     {

@@ -237,12 +237,25 @@ public class ModUpdateService : IModUpdateService, IDisposable
         modPageUpdater(modPageToNewerFiles);
     }
 
+    /// <summary>
+    /// The current value for one key of a cache, then every change to that key only.
+    /// </summary>
+    private static IObservable<Optional<TValue>> WatchKey<TId, TValue>(SourceCache<KeyValuePair<TId, TValue>, EntityId> cache, EntityId id)
+        where TValue : notnull
+    {
+        return cache.Watch(id)
+            .Select(static change => change.Reason == ChangeReason.Remove
+                ? Optional<TValue>.None
+                : Optional.Some(change.Current.Value))
+            .StartWith(Optional<TValue>.None);
+    }
+
     /// <inheritdoc />
     public IObservable<Optional<ModUpdateOnPage>> GetNewestFileVersionObservable(NexusModsFileMetadata.ReadOnly current, Func<ModUpdateOnPage, ModUpdateOnPage?>? select = null)
     {
-        var observable = _newestModVersionCache.Connect()
-            .Transform(kv => kv.Value)
-            .QueryWhenChanged(query => query.Lookup(current.Id));
+        // Afterburn: watch only this file's entry. Connect() + Transform + QueryWhenChanged copied the whole cache for
+        // every row that asked, which made big library lists slow to build.
+        var observable = WatchKey(_newestModVersionCache, current.Id);
         
         // If no custom selector is provided, apply default filters
         if (select == null) 
@@ -270,9 +283,8 @@ public class ModUpdateService : IModUpdateService, IDisposable
     /// <inheritdoc />
     public IObservable<Optional<ModUpdatesOnModPage>> GetNewestModPageVersionObservable(NexusModsModPageMetadata.ReadOnly current, Func<ModUpdatesOnModPage, ModUpdatesOnModPage?>? select = null)
     {
-        var observable = _newestModOnAnyPageCache.Connect()
-            .Transform(kv => kv.Value)
-            .QueryWhenChanged(query => query.Lookup(current.Id));
+        // Afterburn: watch only this mod page's entry (see GetNewestFileVersionObservable).
+        var observable = WatchKey(_newestModOnAnyPageCache, current.Id);
         
         // If no custom selector is provided, apply default filters
         if (select == null) 

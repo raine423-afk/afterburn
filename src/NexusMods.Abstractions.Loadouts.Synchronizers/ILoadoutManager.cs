@@ -102,6 +102,12 @@ public interface ILoadoutManager
     ValueTask ApplyCollectionDownloadRules(NexusCollectionLoadoutGroupId collectionId);
 
     /// <summary>
+    /// Afterburn: re-orders file-conflict priorities with a few safe rules (patches win over what they patch, your own
+    /// mods win over collection mods, collection order is kept). Never throws.
+    /// </summary>
+    ValueTask AutoResolveFileConflicts(LoadoutId loadoutId);
+
+    /// <summary>
     /// Removes all groups and installs the new library item.
     /// </summary>
     ValueTask ReplaceItems(LoadoutId loadoutId, LoadoutItemGroupId[] groupsToRemove, LibraryItem.ReadOnly libraryItemToInstall);
