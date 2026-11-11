@@ -18,6 +18,12 @@ updates:
     ignore:
       # NOTE(erri120): "special" dependencies that are tied to the roslyn compiler version
       - dependency-name: "Microsoft.CodeAnalysis.CSharp*"
+      - dependency-name: "System.CommandLine"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "System.Linq.Async"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "System.Reactive"
+        update-types: ["version-update:semver-major"]
     groups:
       System:
         patterns:
