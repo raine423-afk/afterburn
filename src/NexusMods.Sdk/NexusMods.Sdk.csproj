@@ -6,6 +6,9 @@
         <PackageReference Include="CliWrap" />
         <PackageReference Include="DynamicData" />
         <PackageReference Include="MemoryPack" />
+        <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" VersionOverride="11.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" VersionOverride="11.0.0" />
+        <PackageReference Include="Microsoft.Extensions.ObjectPool" VersionOverride="11.0.0" />
         <PackageReference Include="Microsoft.Extensions.Options" />
         <PackageReference Include="NexusMods.Hashing.xxHash3" />
         <PackageReference Include="NexusMods.MnemonicDB.Abstractions" />
