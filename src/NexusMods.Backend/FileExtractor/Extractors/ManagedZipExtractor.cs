@@ -38,6 +38,12 @@ internal class ManagedZipExtractor : IExtractor
             var relativePath = RelativePath.FromUnsanitizedInput(fixedPath);
             var absolutePath = destination.Combine(relativePath);
 
+            // Defense in depth: never write outside the destination folder, whatever the entry name says (zip-slip).
+            var fullDestination = System.IO.Path.GetFullPath(destination.ToString()).TrimEnd('\\', '/') + System.IO.Path.DirectorySeparatorChar;
+            var fullTarget = System.IO.Path.GetFullPath(absolutePath.ToString());
+            if (!fullTarget.StartsWith(fullDestination, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException($"Archive entry `{originalName}` points outside the extraction folder");
+
             if (zipEntry.IsDirectory)
             {
                 if (!absolutePath.DirectoryExists()) absolutePath.CreateDirectory();

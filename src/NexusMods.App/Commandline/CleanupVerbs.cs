@@ -124,9 +124,14 @@ internal static class CleanupVerbs
         var scriptPath = Path.Combine(AppContext.BaseDirectory, "uninstall-helper.ps1");
 
         // Execute the PowerShell script
-        var args = $"-ExecutionPolicy Bypass -Command \"& \'{scriptPath}\' -FilesToDeletePath \'{filesToDeletePath}\' -DirectoriesToDeletePath \'{directoriesToDeletePath}\'\"";
+        // Pass arguments as separate items so paths containing quotes or apostrophes can't change the command.
         await Cli.Wrap("powershell")
-            .WithArguments(args)
+            .WithArguments(args => args
+                .Add("-NoProfile")
+                .Add("-ExecutionPolicy").Add("Bypass")
+                .Add("-File").Add(scriptPath)
+                .Add("-FilesToDeletePath").Add(filesToDeletePath)
+                .Add("-DirectoriesToDeletePath").Add(directoriesToDeletePath))
             .ExecuteAsync();
 
         // Clean up the temporary files
