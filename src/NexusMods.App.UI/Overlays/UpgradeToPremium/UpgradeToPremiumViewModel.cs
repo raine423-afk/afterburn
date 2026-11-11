@@ -1,4 +1,4 @@
-using NexusMods.Abstractions.Telemetry;
+using NexusMods.Abstractions.NexusLinks;
 using NexusMods.App.UI.Controls.MarkdownRenderer;
 using NexusMods.Sdk;
 using R3;

@@ -29,7 +29,8 @@ public sealed class CyberpunkConflictResolver
     private static readonly string[] PatchWords = ["patch", "fix", "compat", "addon", "override", "hotfix"];
     private static readonly Regex ReplaceMethodRegex = new(
         @"@replaceMethod\(\s*(?<cls>[\w\.]+)\s*\)(?:\s|//[^\n]*\n)*(?:(?:public|private|protected|final|static|cb|native|quest|exec)\s+)*func\s+(?<fn>\w+)",
-        RegexOptions.Compiled);
+        RegexOptions.Compiled,
+        TimeSpan.FromSeconds(2));
 
     private readonly ILogger _logger;
     private readonly IConnection _connection;
@@ -307,7 +308,11 @@ public sealed class CyberpunkConflictResolver
             try { text = File.ReadAllText(file.FullName); } catch { continue; }
             if (!text.Contains("@replaceMethod", StringComparison.Ordinal)) continue;
 
-            foreach (Match m in ReplaceMethodRegex.Matches(text))
+            MatchCollection matches;
+            try { matches = ReplaceMethodRegex.Matches(text); _ = matches.Count; }
+            catch (RegexMatchTimeoutException) { continue; }
+
+            foreach (Match m in matches)
             {
                 var key = $"{m.Groups["cls"].Value}.{m.Groups["fn"].Value}";
                 if (!replacements.TryGetValue(key, out var mods)) replacements[key] = mods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

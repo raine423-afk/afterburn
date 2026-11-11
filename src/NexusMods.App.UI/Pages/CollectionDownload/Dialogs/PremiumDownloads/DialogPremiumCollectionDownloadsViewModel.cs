@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using NexusMods.Abstractions.NexusModsLibrary.Models;
-using NexusMods.Abstractions.Telemetry;
+using NexusMods.Abstractions.NexusLinks;
 using NexusMods.UI.Sdk;
 using R3;
 

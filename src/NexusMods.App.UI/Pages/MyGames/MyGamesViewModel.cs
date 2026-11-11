@@ -42,7 +42,6 @@ using NexusMods.Sdk.Games;
 using NexusMods.Sdk.Jobs;
 using NexusMods.Sdk.Library;
 using NexusMods.Sdk.Loadouts;
-using NexusMods.Telemetry;
 using NexusMods.UI.Sdk;
 using NexusMods.UI.Sdk.Dialog;
 using NexusMods.UI.Sdk.Dialog.Enums;
@@ -150,13 +149,11 @@ public class MyGamesViewModel : APageViewModel<IMyGamesViewModel>, IMyGamesViewM
                                 await Task.Run(async () => await RemoveGame(installation, shouldDeleteDownloads: result.ShouldDeleteDownloads, filesToDelete, collections));
                                 vm.State = GameWidgetState.DetectedGame;
 
-                                Tracking.AddEvent(Events.Game.RemoveGame, new EventMetadata(name: $"{installation.Game.DisplayName} - {installation.LocatorResult.Store}"));
                             });
 
                             vm.ViewGameCommand = ReactiveCommand.Create(() =>
                             {
                                 NavigateToLoadoutLibrary(conn, installation);
-                                Tracking.AddEvent(Events.Game.ViewGame, new EventMetadata(name: $"{installation.Game.DisplayName} - {installation.LocatorResult.Store}"));
                             });
 
                             vm.IsManagedObservable = Loadout.ObserveAll(conn)
@@ -278,7 +275,6 @@ public class MyGamesViewModel : APageViewModel<IMyGamesViewModel>, IMyGamesViewM
                 await Task.Run(async () => await _syncService.UnManage(installation, cleanGameFolder: false));
                 vm.State = GameWidgetState.DetectedGame;
                 
-                Tracking.AddEvent(Events.Game.RevertManageOnDirty, new EventMetadata(name: $"{installation.Game.DisplayName} - {installation.LocatorResult.Store}"));
                 return;
             }
             if (result == clean)
@@ -287,14 +283,11 @@ public class MyGamesViewModel : APageViewModel<IMyGamesViewModel>, IMyGamesViewM
                 await CleanGameFolder(installation, loadout);
                 vm.State = GameWidgetState.ManagedGame;
                 
-                Tracking.AddEvent(Events.Game.CleanGameOnManage, new EventMetadata(name: $"{installation.Game.DisplayName} - {installation.LocatorResult.Store}"));
             }
             
             // do nothing, so keep the files
-            Tracking.AddEvent(Events.Game.KeepDirtyOnManage, new EventMetadata(name: $"{installation.Game.DisplayName} - {installation.LocatorResult.Store}"));
         }
         
-        Tracking.AddEvent(Events.Game.AddGame, new EventMetadata(name: $"{installation.Game.DisplayName} - {installation.LocatorResult.Store}"));
         NavigateToLoadoutLibrary(_connection, installation);
     }
     

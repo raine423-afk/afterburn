@@ -17,7 +17,8 @@ All changes made 2026-11-09 unless noted.
 - Nexus Mods API requests now identify as `Afterburn` (`Application-Name` header and user agent) instead of the official app (`ApplicationConstants.cs`, `Abstractions.Telemetry/Constants.cs`).
 - Removed use of the official app's OAuth client ID (`OAuth.cs`). Afterburn's own ID will be added after Nexus Mods approves its registration.
 - Afterburn ignores saved Nexus Mods logins that belong to the official app's client ID, and its Log out button no longer deletes them (`OAuth2MessageFactory.cs`, `LoginManager.cs`).
-- Disabled all telemetry and usage tracking, and removed the opt-in prompt and setting (`Program.cs`, `TrackingSettings.cs`, `WelcomeOverlayView.axaml`).
+- Removed all telemetry and usage tracking: the OpenTelemetry packages, the event/analytics senders, the opt-in prompt and setting, and the campaign tracking parameters that were appended to links to Nexus Mods (`NexusMods.Telemetry`, `Tracking`, `NexusModsUrlBuilder`, `WelcomeOverlayView.axaml`).
+- Replaced the Nexus Mods logos and icons with neutral ones and changed the colour theme.
 - Project, feedback and update-check links now point to the Afterburn repository instead of Nexus Mods (`ConstantLinks.cs`, `UpdateChecker.cs`, `DevelopmentBuildBannerViewModel.cs`, `WelcomeOverlayView.axaml`).
 
 ### Cyberpunk 2077 only

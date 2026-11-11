@@ -149,18 +149,18 @@
     <Color x:Key="PrimitivePureBlack">#000000</Color>
 
 
-    <!-- Afterburn palette: blue-violet "Midnight" neutrals and neon "Cyan" primary -->
-    <Color x:Key="PrimitiveMidnight950">#0A0C16</Color>
-    <Color x:Key="PrimitiveMidnight900">#11142A</Color>
-    <Color x:Key="PrimitiveMidnight800">#1A1E3A</Color>
-    <Color x:Key="PrimitiveMidnight700">#262B4F</Color>
-    <Color x:Key="PrimitiveMidnight600">#383E67</Color>
-    <Color x:Key="PrimitiveMidnight500">#555C87</Color>
-    <Color x:Key="PrimitiveMidnight400">#7A82AC</Color>
-    <Color x:Key="PrimitiveMidnight300">#A5ACCF</Color>
-    <Color x:Key="PrimitiveMidnight200">#CACFE8</Color>
-    <Color x:Key="PrimitiveMidnight100">#E3E6F5</Color>
-    <Color x:Key="PrimitiveMidnight50">#F3F4FB</Color>
+    <!-- Afterburn palette: teal and neon-blue "Midnight" neutrals and neon "Cyan" primary -->
+    <Color x:Key="PrimitiveMidnight950">#031418</Color>
+    <Color x:Key="PrimitiveMidnight900">#052229</Color>
+    <Color x:Key="PrimitiveMidnight800">#073540</Color>
+    <Color x:Key="PrimitiveMidnight700">#0A3A86</Color>
+    <Color x:Key="PrimitiveMidnight600">#1750C8</Color>
+    <Color x:Key="PrimitiveMidnight500">#5E8C9A</Color>
+    <Color x:Key="PrimitiveMidnight400">#82AEBB</Color>
+    <Color x:Key="PrimitiveMidnight300">#A9CDD7</Color>
+    <Color x:Key="PrimitiveMidnight200">#CDE4EA</Color>
+    <Color x:Key="PrimitiveMidnight100">#E4F2F5</Color>
+    <Color x:Key="PrimitiveMidnight50">#F3FAFC</Color>
     <Color x:Key="PrimitiveCyan950">#032F36</Color>
     <Color x:Key="PrimitiveCyan900">#0B4A57</Color>
     <Color x:Key="PrimitiveCyan800">#0C5E6E</Color>

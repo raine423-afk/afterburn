@@ -17,7 +17,6 @@ using NexusMods.Sdk;
 using NexusMods.Sdk.Library;
 using NexusMods.Sdk.Games;
 using NexusMods.Sdk.Loadouts;
-using NexusMods.Sdk.Tracking;
 
 namespace NexusMods.CLI.Types.IpcHandlers;
 
@@ -143,13 +142,6 @@ public class NxmIpcProtocolHandler : IIpcProtocolHandler
             }
 
             var collectionRevision = await nexusModsLibrary.GetOrAddCollectionRevision(collectionFile, collectionUrl.Collection.Slug, collectionUrl.Revision, CancellationToken.None);
-            Events.CollectionsDownloadCompleted(
-                collectionId: collectionRevision.Collection.CollectionId.Value,
-                revisionId: collectionRevision.RevisionId.Value,
-                gameId: collectionRevision.Collection.GameId.Value,
-                modCount: collectionRevision.Downloads.Count,
-                duration: sw
-            );
 
             _eventBus.Send(new CliMessages.CollectionAddSucceeded(collectionRevision));
         }

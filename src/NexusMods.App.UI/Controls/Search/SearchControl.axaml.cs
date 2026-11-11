@@ -6,7 +6,6 @@ using Avalonia.Interactivity;
 using Avalonia.ReactiveUI;
 using AvaloniaEdit.Search;
 using JetBrains.Annotations;
-using NexusMods.Telemetry;
 using R3;
 using ReactiveUI;
 using static NexusMods.App.UI.Controls.Filters.Filter;
@@ -105,8 +104,6 @@ public partial class SearchControl : UserControl
                     // Focus the textbox when the search panel becomes visible
                     SearchTextBox.Focus();
 
-                    // Tracking
-                    Tracking.AddEvent(Events.Search.OpenSearch, new EventMetadata(name: PageName));
                 }
             });
     }

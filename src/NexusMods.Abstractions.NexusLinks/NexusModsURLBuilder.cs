@@ -1,30 +1,20 @@
 using DynamicData.Kernel;
 using JetBrains.Annotations;
-using Microsoft.AspNetCore.WebUtilities;
 using NexusMods.Abstractions.NexusWebApi.Types;
 using NexusMods.Sdk.NexusModsApi;
 
-namespace NexusMods.Abstractions.Telemetry;
+namespace NexusMods.Abstractions.NexusLinks;
 
-/// NOTE(erri120): This class consolidates all URL tracking parameter related
-/// functionality. Anything that exposes a URL to the user that points to
-/// Nexus Mods should use this class.
-/// Everything in here is hardcoded and parameter values shouldn't be changed.
-/// New methods can be added after talking with the team about this.
+/// Builds links to Nexus Mods pages. Anything that exposes a URL to the user that points to Nexus Mods
+/// should use this class. The links carry no tracking parameters.
 [PublicAPI]
 public static class NexusModsUrlBuilder
 {
     private const string BaseUrl = "https://www.nexusmods.com";
     private const string UsersBaseUrl = "https://users.nexusmods.com";
-    private const string ParameterValueSource = "nexusmodsapp";
-
-    // From https://matomo.org/faq/reports/what-is-campaign-tracking-and-why-it-is-important/
-    private const string ParameterNameCampaign = "mtm_campaign";
-    private const string ParameterNameKeyword  = "mtm_keyword";
-    private const string ParameterNameMedium   = "mtm_medium";
-    private const string ParameterNameSource   = "mtm_source";
-    private const string ParameterNameContent  = "mtm_content";
-    private const string ParameterNameGroup    = "mtm_group";
+    // Afterburn: links are plain URLs. No source/campaign tracking parameters are added, so opening a link tells
+    // the site nothing about the app. The source/campaign arguments below are kept only so existing callers compile.
+    private const string ParameterValueSource = "";
 
     /// <summary>
     /// Campaign value for everything related to updating mods in the app.
@@ -47,19 +37,11 @@ public static class NexusModsUrlBuilder
     public const string CampaignDiagnostics = "diagnostics";
 
     /// <summary>
-    /// Creates a new URI by adding tracking parameters to the given <paramref name="baseUrl"/>.
+    /// Creates a URI from the given <paramref name="baseUrl"/>. Afterburn never adds tracking parameters.
     /// </summary>
-    public static Uri CreateUri(string baseUrl, string? source = ParameterValueSource, string? campaign = null, string? medium = null)
+    public static Uri CreateUri(string baseUrl, string? source = null, string? campaign = null, string? medium = null)
     {
-        var parameters = new Dictionary<string, string?>
-        {
-            { ParameterNameSource, source },
-            { ParameterNameCampaign, campaign },
-            { ParameterNameMedium, medium },
-        };
-
-        var updated = QueryHelpers.AddQueryString(baseUrl, parameters);
-        return new Uri(updated);
+        return new Uri(baseUrl);
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-using NexusMods.Abstractions.Telemetry;
+using NexusMods.Abstractions.NexusLinks;
 using NexusMods.App.UI.Dialog.Enums;
 using NexusMods.App.UI.Resources;
 using NexusMods.App.UI.Windows;

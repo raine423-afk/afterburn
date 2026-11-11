@@ -11,7 +11,7 @@ using NexusMods.Abstractions.Loadouts;
 using NexusMods.Abstractions.Loadouts.Extensions;
 using NexusMods.Abstractions.NexusWebApi;
 using NexusMods.Abstractions.NexusWebApi.Types;
-using NexusMods.Abstractions.Telemetry;
+using NexusMods.Abstractions.NexusLinks;
 using NexusMods.Paths;
 using NexusMods.Sdk.FileStore;
 using NexusMods.Sdk.Games;

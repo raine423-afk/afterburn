@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 using NexusMods.Abstractions.Library;
 using NexusMods.Abstractions.NexusModsLibrary.Models;
 using NexusMods.Abstractions.NexusWebApi;
-using NexusMods.Abstractions.Telemetry;
+using NexusMods.Abstractions.NexusLinks;
 using NexusMods.App.UI.Extensions;
 using NexusMods.App.UI.Overlays;
 using NexusMods.MnemonicDB.Abstractions;

@@ -16,8 +16,4 @@ public interface IPageFactoryContext
     /// </summary>
     PageData? GetSerializablePageData() => null;
 
-    /// <summary>
-    /// Gets the tracking name.
-    /// </summary>
-    string TrackingName => GetType().Name;
 }

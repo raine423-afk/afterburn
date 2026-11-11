@@ -58,6 +58,12 @@ internal partial class LinuxInterop : IOSInterop
     public void OpenUri(Uri uri)
     {
         Debug.Assert(!uri.IsFile, $"use {nameof(OpenFile)} for opening file `{uri}`");
+        if (!UriGuard.IsAllowed(uri))
+        {
+            _logger.LogWarning("Refusing to open a link with an unsupported scheme: `{Scheme}`", uri.IsAbsoluteUri ? uri.Scheme : "(relative)");
+            return;
+        }
+
         OpenUriImpl(uri).FireAndForget(_logger);
     }
 

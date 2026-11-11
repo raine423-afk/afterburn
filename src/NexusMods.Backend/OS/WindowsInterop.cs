@@ -44,7 +44,15 @@ internal partial class WindowsInterop : IOSInterop
     public void OpenUri(Uri uri)
     {
         Debug.Assert(!uri.IsFile, $"use {nameof(OpenFile)} for opening file `{uri}`");
-        var command = CreateStartCommand(uri.ToString());
+        if (!UriGuard.IsAllowed(uri))
+        {
+            _logger.LogWarning("Refusing to open a link with an unsupported scheme: `{Scheme}`", uri.IsAbsoluteUri ? uri.Scheme : "(relative)");
+            return;
+        }
+
+        // AbsoluteUri is fully escaped (quotes, spaces and percent signs), so the text can't break out of the quoted
+        // argument or trigger cmd.exe's %VARIABLE% expansion.
+        var command = CreateStartCommand(uri.AbsoluteUri);
         _processRunner.Run(command, logOutput: false);
     }
 
