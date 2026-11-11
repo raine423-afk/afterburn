@@ -798,7 +798,7 @@ To apply changes or launch the game again, please close the game first.</value>
         <value>Back</value>
     </data>
     <data name="TopBar_GiveFeedback_ToolTip" xml:space="preserve">
-        <value>Click to give feedback and help us improve.</value>
+        <value>Copies a diagnostic report and opens a bug report page.</value>
     </data>
     <data name="TopBarActions__LOG_IN_ToolTip" xml:space="preserve">
         <value>Connect your Nexus Mods account</value>

@@ -25,13 +25,17 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 LicenseFile=..\LICENSE.md
 SetupIconFile=..\src\NexusMods.App\icon.ico
-UninstallDisplayIcon={app}\NexusMods.App.exe
+UninstallDisplayIcon={app}\Afterburn.exe
 OutputDir=..\installer-out
 OutputBaseFilename=Afterburn-Setup-{#AppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
+CloseApplicationsFilter=Afterburn.exe
+AllowUNCPath=no
+SetupLogging=no
+UninstallDisplayName=Afterburn
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
@@ -45,9 +49,9 @@ Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\publish\THIRD-PARTY-PACKAGES.md"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
-Name: "{group}\Afterburn"; Filename: "{app}\NexusMods.App.exe"
+Name: "{group}\Afterburn"; Filename: "{app}\Afterburn.exe"
 Name: "{group}\Uninstall Afterburn"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Afterburn"; Filename: "{app}\NexusMods.App.exe"; Tasks: desktopicon
+Name: "{autodesktop}\Afterburn"; Filename: "{app}\Afterburn.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\NexusMods.App.exe"; Description: "{cm:LaunchProgram,Afterburn}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\Afterburn.exe"; Description: "{cm:LaunchProgram,Afterburn}"; Flags: nowait postinstall skipifsilent

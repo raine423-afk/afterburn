@@ -40,7 +40,7 @@
                            TextAlignment="Center"
                            TextWrapping="Wrap"
                            Foreground="{StaticResource NeutralSubduedBrush}"
-                           Text="Currently, the app supports Stardew Valley and Cyberpunk 2077 with more games coming soon. Share your feedback anytime using the 'Give Feedback' button in the footer." />
+                           Text="Currently, the app supports Stardew Valley and Cyberpunk 2077 with more games coming soon. Found a problem? Use the 'Report a bug' button in the footer." />
             </StackPanel>
 
             <StackPanel Spacing="8">

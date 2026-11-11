@@ -33,6 +33,11 @@ public class CliClient(ILogger<CliClient> logger, SyncFile syncFile, IServicePro
             await client.ConnectAsync(IPAddress.Loopback, port);
             await using var stream = client.GetStream();
 
+            // Afterburn: prove we're running as the same user by sending the session secret first.
+            var key = syncFile.ReadAuthKey() ?? throw new NoMainProcessStarted();
+            await stream.WriteAsync(key);
+            await stream.FlushAsync();
+
             logger.LogDebug("Connected to main process {ProcessId} on port {Port}", process.Id, port);
             await RunTillCloseAsync(new ConsoleSettings
             {

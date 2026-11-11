@@ -7,6 +7,8 @@ Modifications copyright (C) 2026 the Afterburn contributors, licensed under the 
 
 Afterburn is not affiliated with or endorsed by Nexus Mods. Nexus Mods stated that the community may fork the app if the fork uses a different name ("Discontinuing the Nexus Mods App FAQ", help.nexusmods.com, updated 2026-01-14).
 
+AI disclosure: the modifications described below were developed with AI assistance (Claude, by Anthropic), under human direction and testing.
+
 ## Changes from upstream
 
 All changes made 2026-11-09 unless noted.
@@ -32,6 +34,11 @@ All changes made 2026-11-09 unless noted.
 - Sharper corners throughout (`ElementCornerRadius.axaml`).
 
 ### Repository
+- Path-escape hardening: game paths with `..` segments or roots are refused before they become disk paths (`GamePath.cs`, `GameLocations.cs`), and the 7-Zip trailing-space clean-up never moves or deletes outside the extraction folder (`SevenZipExtractor.cs`).
+- Description images load only from Nexus Mods and GitHub hosts; all image downloads must be HTTPS and are capped at 20 MB (`MarkdownRendererViewModel.cs`, `HttpLoader.cs`). Optional Authenticode signing of `Afterburn.exe` and the installer in CI when a certificate secret is configured (`build.yaml`).
+- Security: the local command channel now requires a per-session secret stored in the user's private app folder (`SyncFile.cs`, `CliServer.cs`, `CliClient.cs`); Windows opens links and files via the shell directly instead of `cmd.exe` (`WindowsInterop.cs`); the GitHub owner used for updates, bug reports and links is set to this repository (`AfterburnBrand.cs`); update downloads are only offered from GitHub (`UpdaterViewModel.cs`).
+- Easier collection linking: a "Paste collection link" button in Library → Collections accepts normal nexusmods.com collection addresses (latest published revision if none given) or nxm:// links and hands them to the existing nxm handler (`CollectionLinkResolver.cs`, `LibraryView*`, `LibraryViewModel.cs`, `AvaloniaInterop.cs`). Clear messages when not logged in or when the game isn't set up yet (`MainWindowViewModel.cs`).
+- One-click bug reporting: a "Report a bug" button (footer and Help menu) replaces the upstream "Give Feedback" button and the Nexus Mods Discord, forums and status-page links (`Controls/BugReport/BugReporter.cs`, `TopBar*`, `DevelopmentBuildBanner*`, `ConstantLinks.cs`). Lighter runtime settings (no concurrent GC, ConserveMemory) in `NexusMods.App.csproj`. Installer hardening (`AllowUNCPath=no`, close only Afterburn.exe) and SHA-256 checksums plus a dependency vulnerability check in CI.
 - The Windows launcher is renamed `NexusMods.App.exe` → `Afterburn.exe` after publish (`NexusMods.App.csproj`, `installer/afterburn.iss`, `uninstall.bat`, `uninstall-helper.ps1`).
 - Final branding pass: Windows registry keys and protocol handler IDs now use "Afterburn"; Linux desktop/AppStream metadata, NuGet package author and URLs, the collection "Created with" text, the in-app changelog source and Dependabot reviewer no longer name Nexus Mods; removed the upstream docs site, IDE settings, Qodana/Codecov configs and the upstream release notes (kept in git history). Copyright notices, the license, code identifiers/namespaces, and references to the Nexus Mods website and API (login, downloads, collections) are intentionally kept.
 - Removed Nexus Mods' CI/CD workflows (signing, NuGet publishing, releases and their docs site), the `docs/Nexus` theme submodule and `mkdocs.yml`. Added a simple Afterburn build workflow (`.github/workflows/build.yaml`), a new issue template and `CONTRIBUTING.md`, and an Afterburn section in `CHANGELOG.md`.

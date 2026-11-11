@@ -113,4 +113,13 @@
     <Target Name="AfterburnRenameLauncher" AfterTargets="Publish" Condition="'$(OS)' == 'Windows_NT'">
         <Move SourceFiles="$(PublishDir)NexusMods.App.exe" DestinationFiles="$(PublishDir)Afterburn.exe" Condition="Exists('$(PublishDir)NexusMods.App.exe')" />
     </Target>
+
+    <!-- Lighter and faster: no extra GC threads, trim memory, skip other-language resources of dependencies. -->
+    <PropertyGroup>
+        <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+        <ServerGarbageCollector>false</ServerGarbageCollector>
+    </PropertyGroup>
+    <ItemGroup>
+        <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
+    </ItemGroup>
 </Project>

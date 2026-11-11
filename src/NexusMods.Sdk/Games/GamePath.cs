@@ -75,7 +75,25 @@ public readonly struct GamePath : IPath<GamePath>, IEquatable<GamePath>, ICompar
     /// <param name="folderPath">
     ///    The absolute path to combine with current relative path.
     /// </param>
-    public AbsolutePath Combine(AbsolutePath folderPath) => folderPath.Combine(Path);
+    public AbsolutePath Combine(AbsolutePath folderPath) => folderPath.Combine(EnsureContained(Path));
+
+    /// <summary>
+    /// Afterburn hardening: a game path must stay inside its game location. Mod-supplied paths (installer
+    /// destinations, collection manifests) containing ".." segments or a drive/root would otherwise resolve
+    /// outside the game folder when written to disk.
+    /// </summary>
+    public static RelativePath EnsureContained(RelativePath path)
+    {
+        var s = path.ToString();
+        if (s.Length == 0) return path;
+        if (s[0] == '/' || s[0] == '\\' || (s.Length >= 2 && s[1] == ':'))
+            throw new InvalidOperationException($"Refusing rooted game path `{s}`");
+        foreach (var segment in s.Split('/', '\\'))
+        {
+            if (segment == "..") throw new InvalidOperationException($"Refusing game path that leaves the game folder: `{s}`");
+        }
+        return path;
+    }
 
     /// <inheritdoc />
     public RelativePath Name => Path.Name;

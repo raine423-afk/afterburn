@@ -83,7 +83,7 @@ public readonly struct GameLocations : IReadOnlyDictionary<LocationId, GameLocat
             .MinBy(gamePath => gamePath.Path.Path.Length);
     }
 
-    public AbsolutePath ToAbsolutePath(GamePath gamePath) => _locations[gamePath.LocationId].Path.Combine(gamePath.Path);
+    public AbsolutePath ToAbsolutePath(GamePath gamePath) => _locations[gamePath.LocationId].Path.Combine(GamePath.EnsureContained(gamePath.Path));
 
     /// <inheritdoc cref="IEnumerable{T}.GetEnumerator"/>
     public FrozenDictionary<LocationId, GameLocationDescriptor>.Enumerator GetEnumerator() => _locations.GetEnumerator();

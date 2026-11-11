@@ -30,16 +30,22 @@ internal partial class WindowsInterop : IOSInterop
         return _fileSystem.FromUnsanitizedFullPath(rawPath);
     }
 
-    private static Command CreateStartCommand(string target)
+    /// <summary>
+    /// Afterburn: open a link or file with its associated app via the Windows shell directly, without going through
+    /// cmd.exe (which would expand %VARIABLES% and interpret special characters in the target).
+    /// </summary>
+    private void ShellOpen(string target)
     {
-        // NOTE(erri120): `cmd.exe start` will open the associated application directly using shell associations.
-        // `UseShellExecute` should be used instead but CliWrap doesn't support setting that.
-        // The process spawned when calling `cmd.exe start` will exit immediately and doesn't track the lifetime
-        // of the opened application handling the target.
-        // https://ss64.com/nt/cmd.html
-        // https://ss64.com/nt/start.html
-        return Cli.Wrap("cmd.exe").WithArguments($@"/c start """" ""{target}""");
+        try
+        {
+            using var _ = System.Diagnostics.Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Failed to open `{Target}`", target);
+        }
     }
+
 
     public void OpenUri(Uri uri)
     {
@@ -50,10 +56,7 @@ internal partial class WindowsInterop : IOSInterop
             return;
         }
 
-        // AbsoluteUri is fully escaped (quotes, spaces and percent signs), so the text can't break out of the quoted
-        // argument or trigger cmd.exe's %VARIABLE% expansion.
-        var command = CreateStartCommand(uri.AbsoluteUri);
-        _processRunner.Run(command, logOutput: false);
+        ShellOpen(uri.AbsoluteUri);
     }
 
     public void OpenFile(AbsolutePath filePath)
@@ -61,8 +64,7 @@ internal partial class WindowsInterop : IOSInterop
         if (!Helper.AssertIsFile(filePath, _logger)) return;
 
         var nativePath = filePath.ToNativeSeparators(_fileSystem.OS);
-        var command = CreateStartCommand(nativePath);
-        _processRunner.Run(command, logOutput: false);
+        ShellOpen(nativePath);
     }
 
     public void OpenDirectory(AbsolutePath directoryPath)

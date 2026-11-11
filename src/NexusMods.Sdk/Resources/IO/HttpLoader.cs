@@ -8,6 +8,7 @@ public sealed class HttpLoader : IResourceLoader<Uri, byte[]>
 {
     private readonly HttpClient _httpClient;
     private const string SupportedScheme = "https";
+    private const long MaxBytes = 20 * 1024 * 1024;
 
     /// <summary>
     /// Constructor.
@@ -21,12 +22,27 @@ public sealed class HttpLoader : IResourceLoader<Uri, byte[]>
     public async ValueTask<Resource<byte[]>> LoadResourceAsync(Uri resourceIdentifier, CancellationToken cancellationToken)
     {
         Debug.Assert(resourceIdentifier.Scheme.Equals(SupportedScheme, StringComparison.OrdinalIgnoreCase));
+        // Afterburn: enforce HTTPS in release builds too, and never read more than MaxBytes.
+        if (!resourceIdentifier.IsAbsoluteUri || !resourceIdentifier.Scheme.Equals(SupportedScheme, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Only HTTPS resources can be loaded");
 
-        using var responseMessage = await _httpClient.GetAsync(resourceIdentifier, HttpCompletionOption.ResponseContentRead, cancellationToken);
+        using var responseMessage = await _httpClient.GetAsync(resourceIdentifier, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         responseMessage.EnsureSuccessStatusCode();
 
         using var content = responseMessage.Content;
-        var bytes = await content.ReadAsByteArrayAsync(cancellationToken: cancellationToken);
+        if (content.Headers.ContentLength > MaxBytes) throw new InvalidDataException("Resource is too large");
+
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(chunk, cancellationToken)) > 0)
+        {
+            if (buffer.Length + read > MaxBytes) throw new InvalidDataException("Resource is too large");
+            buffer.Write(chunk, 0, read);
+        }
+
+        var bytes = buffer.ToArray();
 
         return new Resource<byte[]>
         {

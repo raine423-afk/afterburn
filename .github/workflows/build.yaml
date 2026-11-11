@@ -16,6 +16,11 @@ jobs:
     # Only tag builds publish a release, so only they need write access.
     permissions:
       contents: write
+    env:
+      # Optional code signing: add these two repository secrets (Settings -> Secrets and variables -> Actions)
+      # to sign Afterburn.exe and the installer. Without them, the build still works but is unsigned.
+      SIGN_PFX_BASE64: ${{ secrets.SIGN_PFX_BASE64 }}
+      SIGN_PFX_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
@@ -23,6 +28,20 @@ jobs:
           dotnet-version: '9.x'
       - name: Publish (self-contained, so users don't need to install .NET)
         run: dotnet publish src/NexusMods.App/NexusMods.App.csproj -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -o publish -nologo "-clp:ErrorsOnly"
+      - name: Check dependencies for known vulnerabilities
+        continue-on-error: true
+        run: dotnet list src/NexusMods.App/NexusMods.App.csproj package --vulnerable --include-transitive
+      - name: Sign Afterburn.exe (only if a certificate is configured)
+        if: env.SIGN_PFX_BASE64 != ''
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "sign.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGN_PFX_BASE64))
+          try {
+            $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+            & $signtool.FullName sign /fd SHA256 /f $pfx /p $env:SIGN_PFX_PASSWORD /tr http://timestamp.digicert.com /td SHA256 publish/Afterburn.exe
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally { Remove-Item $pfx -Force -ErrorAction SilentlyContinue }
       - name: Add license files to the build
         shell: pwsh
         run: Copy-Item LICENSE.md, NOTICE.md, THIRD-PARTY-NOTICES.md, README.md publish/
@@ -48,15 +67,35 @@ jobs:
         with:
           name: Afterburn-win-x64
           path: publish/
+      - name: Sign the installer (only if a certificate is configured)
+        if: env.SIGN_PFX_BASE64 != ''
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "sign.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGN_PFX_BASE64))
+          try {
+            $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+            & $signtool.FullName sign /fd SHA256 /f $pfx /p $env:SIGN_PFX_PASSWORD /tr http://timestamp.digicert.com /td SHA256 (Get-ChildItem installer-out/*.exe).FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally { Remove-Item $pfx -Force -ErrorAction SilentlyContinue }
+      - name: SHA-256 checksum of the installer
+        shell: pwsh
+        run: |
+          Get-ChildItem installer-out/*.exe | ForEach-Object {
+            $h = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$h  $($_.Name)" | Out-File -Encoding ascii "$($_.FullName).sha256"
+          }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Afterburn-Setup
-          path: installer-out/*.exe
+          path: installer-out/*
       - name: Publish the release (tags only)
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          files: installer-out/*.exe
+          files: |
+            installer-out/*.exe
+            installer-out/*.sha256
           body: |
             Windows installer for Afterburn ${{ github.ref_name }}.
             Complete source code for this release: the "Source code" archives below, or this repository at tag ${{ github.ref_name }}. Licensed under GPL-3.0; see LICENSE.md, NOTICE.md and THIRD-PARTY-NOTICES.md.

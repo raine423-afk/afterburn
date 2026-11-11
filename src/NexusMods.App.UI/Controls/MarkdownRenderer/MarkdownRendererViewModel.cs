@@ -142,6 +142,13 @@ public class MarkdownRendererViewModel : AViewModel<IMarkdownRendererViewModel>,
         return Task.FromResult<Stream?>(ms);
     }
 
+    private static bool IsTrustedImageHost(string host)
+    {
+        host = host.ToLowerInvariant();
+        return host == "nexusmods.com" || host.EndsWith(".nexusmods.com", StringComparison.Ordinal)
+            || host == "github.com" || host.EndsWith(".githubusercontent.com", StringComparison.Ordinal);
+    }
+
     private class ImageResolvePluginImpl : IMdAvPlugin
     {
         private readonly IImageResolver _imageResolver;
@@ -182,6 +189,14 @@ public class MarkdownRendererViewModel : AViewModel<IMarkdownRendererViewModel>,
                 if (uri.Scheme != "https")
                 {
                     _parent._logger.LogWarning("Unknown URI schema: {Uri}", uri);
+                    return null;
+                }
+
+                // Afterburn privacy: only load pictures from Nexus Mods and GitHub. Other sites never get a request,
+                // so they can't see the user's IP address or track that a description was viewed.
+                if (!IsTrustedImageHost(uri.Host))
+                {
+                    _parent._logger.LogDebug("Skipped image from untrusted host {Host}", uri.Host);
                     return null;
                 }
 

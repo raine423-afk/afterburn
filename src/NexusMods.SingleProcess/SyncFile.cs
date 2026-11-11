@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using NexusMods.Sdk.Settings;
 
@@ -11,6 +12,10 @@ public class SyncFile
 {
     private readonly MultiProcessSharedArray _sharedArray;
     private readonly ILogger<SyncFile> _logger;
+    private readonly string _authKeyPath;
+
+    /// <summary>Length of the secret that clients must send before any command (Afterburn hardening).</summary>
+    public const int AuthKeyLength = 32;
 
     /// <summary>
     /// DI constructor
@@ -21,6 +26,38 @@ public class SyncFile
         _logger = logger;
         _logger.LogDebug("Using Sync File: {SyncFile}", settings.SyncFile);
         _sharedArray = new MultiProcessSharedArray(settings.SyncFile, itemCount: 8);
+        _authKeyPath = settings.SyncFile + ".key";
+    }
+
+    /// <summary>
+    /// Creates a new random secret for this session and saves it in the user's private app folder,
+    /// so only programs running as this user can talk to the main process.
+    /// </summary>
+    public byte[] CreateAuthKey()
+    {
+        var key = RandomNumberGenerator.GetBytes(AuthKeyLength);
+        var tmp = _authKeyPath + ".tmp";
+        File.WriteAllBytes(tmp, key);
+        if (!OperatingSystem.IsWindows())
+        {
+            try { File.SetUnixFileMode(tmp, UnixFileMode.UserRead | UnixFileMode.UserWrite); } catch { /* best effort */ }
+        }
+        File.Move(tmp, _authKeyPath, overwrite: true);
+        return key;
+    }
+
+    /// <summary>Reads the current session secret, or null if there isn't one.</summary>
+    public byte[]? ReadAuthKey()
+    {
+        try
+        {
+            var key = File.ReadAllBytes(_authKeyPath);
+            return key.Length == AuthKeyLength ? key : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
     
     /// <summary>

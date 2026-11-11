@@ -73,6 +73,7 @@ public class LibraryViewModel : APageViewModel<ILibraryViewModel>, ILibraryViewM
 
     public ReactiveCommand<Unit> OpenNexusModsCommand { get; }
     public ReactiveCommand<Unit> OpenNexusModsCollectionsCommand { get; }
+    public ReactiveCommand<Unit> AddCollectionFromLinkCommand { get; }
 
     [Reactive] public int SelectionCount { get; private set; }
     
@@ -243,6 +244,12 @@ public class LibraryViewModel : APageViewModel<ILibraryViewModel>, ILibraryViewM
             var gameUri = NexusModsUrlBuilder.GetBrowseCollectionsUri(gameDomain);
             osInterop.OpenUri(gameUri);
         });
+
+        // Afterburn: copy a collection's address on nexusmods.com, then click "Paste collection link".
+        AddCollectionFromLinkCommand = new ReactiveCommand<Unit>(
+            executeAsync: (_, cancellationToken) => AddCollectionFromClipboard(cancellationToken),
+            awaitOperation: AwaitOperation.Drop
+        );
 
         this.WhenActivated(disposables =>
         {
@@ -1055,6 +1062,52 @@ After asking design, we're choosing to simply open the mod page for now.
         if (oldItemsToRemove.Count > 0)
             await _libraryService.RemoveLibraryItems(oldItemsToRemove);
     }
+    private async ValueTask AddCollectionFromClipboard(CancellationToken cancellationToken)
+    {
+        var text = await _serviceProvider.GetRequiredService<IAvaloniaInterop>().GetClipboardTextAsync();
+        if (!CollectionLinkResolver.TryParse(text, out var link) || link is null)
+        {
+            _notificationService.ShowToast(
+                "No collection link found. On nexusmods.com, open the collection, copy the address from your browser's address bar, then click Paste collection link again.",
+                ToastNotificationVariant.Neutral);
+            return;
+        }
+
+        if (!await _loginManager.GetIsUserLoggedInAsync(cancellationToken))
+        {
+            _notificationService.ShowToast(
+                "Log in to Nexus Mods first (top-right button), then click Paste collection link again.",
+                ToastNotificationVariant.Failure);
+            return;
+        }
+
+        _notificationService.ShowToast("Finding the collection on Nexus Mods...");
+
+        string? nxmUrl;
+        try
+        {
+            var graphQlClient = _serviceProvider.GetRequiredService<IGraphQlClient>();
+            nxmUrl = await Task.Run(() => CollectionLinkResolver.ToNxmUrlAsync(link, graphQlClient, cancellationToken).AsTask(), cancellationToken);
+        }
+        catch (Exception)
+        {
+            nxmUrl = null;
+        }
+
+        if (nxmUrl is null)
+        {
+            _notificationService.ShowToast(
+                "Couldn't find that collection, or it has no published version yet. Check the link and your internet connection.",
+                ToastNotificationVariant.Failure);
+            return;
+        }
+
+        // Hand the link to the same handler the website's "Add to mod manager" button uses, so the
+        // download, install page and messages are exactly the same.
+        var handler = _serviceProvider.GetServices<NexusMods.CLI.Types.IIpcProtocolHandler>().FirstOrDefault(h => h.Protocol == "nxm");
+        if (handler is null) return;
+        _ = Task.Run(() => handler.Handle(nxmUrl, CancellationToken.None), CancellationToken.None);
+    }
 }
 
 public readonly record struct InstallMessage(LibraryItemId[] Ids);
@@ -1278,4 +1331,5 @@ public struct DownloadError
     /// The error which occurred during the download or installation of the file.
     /// </summary>
     public Exception Error;
+
 }

@@ -6,7 +6,7 @@ namespace NexusMods.App.UI.Controls.DevelopmentBuildBanner;
 
 public interface IDevelopmentBuildBannerViewModel : IViewModelInterface
 {
-    public ReactiveCommand<Unit, Unit> GiveFeedbackCommand { get; }
+    public ReactiveCommand<Unit, Unit> ReportBugCommand { get; }
 
     /// <summary>Pauses or resumes all downloads.</summary>
     public ReactiveCommand<Unit, Unit> ToggleDownloadsPausedCommand { get; }

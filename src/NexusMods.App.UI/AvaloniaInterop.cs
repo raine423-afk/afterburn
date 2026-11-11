@@ -14,6 +14,7 @@ public interface IAvaloniaInterop
     
     Task<AbsolutePath[]> OpenFilePickerAsync(FilePickerOpenOptions filePickerOpenOptions);
     Task SetClipboardTextAsync(string text);
+    Task<string?> GetClipboardTextAsync();
 }
 
 
@@ -33,6 +34,14 @@ internal class AvaloniaInterop : IAvaloniaInterop
         _clipboard = clipboard;
     }
     
+    public async Task<string?> GetClipboardTextAsync()
+    {
+        var clipboard = _clipboard;
+        if (clipboard is null) return null;
+        try { return await clipboard.GetTextAsync(); }
+        catch (Exception) { return null; }
+    }
+
     public async Task SetClipboardTextAsync(string text)
     {
         var clipboard = _clipboard;

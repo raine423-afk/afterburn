@@ -36,7 +36,7 @@ public partial class DevelopmentBuildBannerView : ReactiveUserControl<IDevelopme
 
         this.WhenActivated(d =>
             {
-                this.BindCommand(ViewModel, vm => vm.GiveFeedbackCommand, view => view.GiveFeedbackButton)
+                this.BindCommand(ViewModel, vm => vm.ReportBugCommand, view => view.ReportBugButton)
                     .DisposeWith(d);
 
                 this.BindCommand(ViewModel, vm => vm.ToggleDownloadsPausedCommand, view => view.PauseDownloadsButton)

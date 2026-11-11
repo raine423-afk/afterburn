@@ -27,6 +27,7 @@ public sealed class CliServer : IHostedService, IDisposable
     private readonly ILogger<CliServer> _logger;
     private readonly CommandLineConfigurator _configurator;
     private readonly SyncFile _syncFile;
+    private byte[] _authKey = [];
 
     /// <summary>
     /// Constructor.
@@ -72,6 +73,9 @@ public sealed class CliServer : IHostedService, IDisposable
             throw new SingleProcessLockException();
         }
 
+        // Only write the secret once we know we're the main process, so we never overwrite another instance's key.
+        _authKey = _syncFile.CreateAuthKey();
+
         _logger.LogInformation("Started TCP listener on port {Port}", port);
         return Task.CompletedTask;
     }
@@ -111,6 +115,21 @@ public sealed class CliServer : IHostedService, IDisposable
         try
         {
             var stream = client.GetStream();
+
+            // Afterburn: every client must first send the session secret. Anything else is dropped.
+            var received = new byte[SyncFile.AuthKeyLength];
+            using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(Token))
+            {
+                timeout.CancelAfter(TimeSpan.FromSeconds(5));
+                try { await stream.ReadExactlyAsync(received, timeout.Token); }
+                catch (Exception) { _logger.LogWarning("Rejected a local connection that didn't authenticate"); return; }
+            }
+
+            if (_authKey.Length != SyncFile.AuthKeyLength || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(received, _authKey))
+            {
+                _logger.LogWarning("Rejected a local connection with the wrong key");
+                return;
+            }
 
             var (arguments, renderer) = await ProxiedRenderer.Create(_serviceProvider, stream);
             await _configurator.RunAsync(arguments ?? [], renderer, Token);

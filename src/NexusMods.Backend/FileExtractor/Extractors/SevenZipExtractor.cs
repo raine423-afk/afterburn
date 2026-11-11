@@ -113,6 +113,16 @@ public class SevenZipExtractor : IExtractor
             var source = System.IO.Path.Combine(nativePath, fileNameOnDisk);
             var destination = System.IO.Path.Combine(nativePath, fixedFileName);
 
+            // Afterburn hardening: entry names come from the archive. Never move or delete anything outside the
+            // extraction folder, whatever the name contains (".." segments, rooted paths).
+            var root = System.IO.Path.GetFullPath(nativePath).TrimEnd('\\', '/') + System.IO.Path.DirectorySeparatorChar;
+            if (!System.IO.Path.GetFullPath(source).StartsWith(root, StringComparison.OrdinalIgnoreCase) ||
+                !System.IO.Path.GetFullPath(destination).StartsWith(root, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("Skipping archive entry that points outside the extraction folder: `{Name}`", fileName);
+                continue;
+            }
+
             if (isDirectory)
             {
                 try

@@ -75,7 +75,13 @@ public class UpdaterViewModel : AOverlayViewModel<IUpdaterViewModel>, IUpdaterVi
             currentVersion: currentVersion,
             latestVersion: latestVersion,
             releaseWebUri: new Uri(release.HtmlUrl),
-            assetDownloadUri: releaseAsset is null ? null : new Uri(releaseAsset.BrowserDownloadUrl)
+            assetDownloadUri: releaseAsset is null || !IsGitHubDownload(releaseAsset.BrowserDownloadUrl) ? null : new Uri(releaseAsset.BrowserDownloadUrl)
         );
     }
+
+    // Afterburn: only ever send users to a GitHub-hosted download.
+    private static bool IsGitHubDownload(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        && uri.Scheme == Uri.UriSchemeHttps
+        && (uri.Host == "github.com" || uri.Host.EndsWith(".githubusercontent.com", StringComparison.OrdinalIgnoreCase));
 }

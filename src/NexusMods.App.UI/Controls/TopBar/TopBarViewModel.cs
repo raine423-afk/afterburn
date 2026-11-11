@@ -10,6 +10,7 @@ using NexusMods.Abstractions.NexusWebApi;
 using NexusMods.Abstractions.NexusWebApi.Types;
 using NexusMods.Sdk.Settings;
 using NexusMods.Abstractions.NexusLinks;
+using NexusMods.App.UI.Controls.BugReport;
 using NexusMods.App.UI.Controls.Navigation;
 using NexusMods.App.UI.Overlays;
 using NexusMods.App.UI.Pages.Changelog;
@@ -44,10 +45,8 @@ public class TopBarViewModel : AViewModel<ITopBarViewModel>, ITopBarViewModel
     public ReactiveUI.ReactiveCommand<NavigationInformation, Unit> ViewChangelogCommand { get; }
     public ReactiveUI.ReactiveCommand<Unit, Unit> ViewAppLogsCommand { get; }
     public ReactiveUI.ReactiveCommand<Unit, Unit> ShowWelcomeMessageCommand { get; }
-    public ReactiveUI.ReactiveCommand<Unit, Unit> OpenDiscordCommand { get; }
-    public ReactiveUI.ReactiveCommand<Unit, Unit> OpenForumsCommand { get; }
+    public ReactiveUI.ReactiveCommand<Unit, Unit> ReportBugCommand { get; }
     public ReactiveUI.ReactiveCommand<Unit, Unit> OpenGitHubCommand { get; }
-    public ReactiveUI.ReactiveCommand<Unit, Unit> OpenStatusPageCommand { get; }
     public R3.ReactiveCommand<R3.Unit, R3.Unit> LoginCommand { get; }
     public ReactiveUI.ReactiveCommand<Unit, Unit> LogoutCommand { get; }
     public ReactiveUI.ReactiveCommand<Unit, Unit> OpenNexusModsProfileCommand { get; }
@@ -75,7 +74,8 @@ public class TopBarViewModel : AViewModel<ITopBarViewModel>, ITopBarViewModel
         IOSInterop osInterop,
         ISettingsManager settingsManager,
         IFileSystem fileSystem,
-        IWindowNotificationService notificationService)
+        IWindowNotificationService notificationService,
+        IAvaloniaInterop avaloniaInterop)
     {
         _logger = logger;
         _loginManager = loginManager;
@@ -163,10 +163,8 @@ public class TopBarViewModel : AViewModel<ITopBarViewModel>, ITopBarViewModel
 
         OpenNexusModsAccountSettingsCommand = ReactiveCommand.Create(() => osInterop.OpenUri(NexusModsUrlBuilder.UserSettingsUri));
         OpenNexusModsPremiumCommand = ReactiveCommand.Create( () => osInterop.OpenUri(NexusModsUrlBuilder.UpgradeToPremiumUri));
-        OpenDiscordCommand = ReactiveCommand.Create( () => osInterop.OpenUri(ConstantLinks.DiscordUri));
-        OpenForumsCommand = ReactiveCommand.Create( () => osInterop.OpenUri(ConstantLinks.ForumsUri));
+        ReportBugCommand = ReactiveCommand.CreateFromTask(() => BugReporter.ReportAsync(avaloniaInterop, osInterop, settingsManager, fileSystem, logger));
         OpenGitHubCommand = ReactiveCommand.Create( () => osInterop.OpenUri(ConstantLinks.GitHubUri));
-        OpenStatusPageCommand = ReactiveCommand.Create(() => osInterop.OpenUri(ConstantLinks.StatusPageUri));
 
         this.WhenActivated(d =>
             {

@@ -1,6 +1,10 @@
 using System.Globalization;
 using System.Reactive;
 using Avalonia.Threading;
+using Microsoft.Extensions.Logging;
+using NexusMods.App.UI.Controls.BugReport;
+using NexusMods.Paths;
+using NexusMods.Sdk.Settings;
 using NexusMods.Abstractions.Downloads;
 using NexusMods.Networking.NexusWebApi;
 using NexusMods.Sdk;
@@ -11,9 +15,7 @@ namespace NexusMods.App.UI.Controls.DevelopmentBuildBanner;
 
 public class DevelopmentBuildBannerViewModel : AViewModel<IDevelopmentBuildBannerViewModel>, IDevelopmentBuildBannerViewModel
 {
-    private static readonly Uri GiveFeedbackUri = AfterburnBrand.IssuesUri;
-
-    public ReactiveCommand<Unit, Unit> GiveFeedbackCommand { get; }
+    public ReactiveCommand<Unit, Unit> ReportBugCommand { get; }
 
     /// <inheritdoc />
     public ReactiveCommand<Unit, Unit> ToggleDownloadsPausedCommand { get; }
@@ -47,9 +49,9 @@ public class DevelopmentBuildBannerViewModel : AViewModel<IDevelopmentBuildBanne
         private set => this.RaiseAndSetIfChanged(ref _isRateLimitLow, value);
     }
 
-    public DevelopmentBuildBannerViewModel(IOSInterop osInterop, NexusApiRateLimitTracker rateLimitTracker, IDownloadsService downloadsService)
+    public DevelopmentBuildBannerViewModel(IOSInterop osInterop, NexusApiRateLimitTracker rateLimitTracker, IDownloadsService downloadsService, IAvaloniaInterop avaloniaInterop, ISettingsManager settingsManager, IFileSystem fileSystem, ILogger<DevelopmentBuildBannerViewModel> logger)
     {
-        GiveFeedbackCommand = ReactiveCommand.Create(() => osInterop.OpenUri(GiveFeedbackUri));
+        ReportBugCommand = ReactiveCommand.CreateFromTask(() => BugReporter.ReportAsync(avaloniaInterop, osInterop, settingsManager, fileSystem, logger));
 
         // Afterburn: pause/resume all downloads from the bottom bar. While paused, downloads that start later
         // (for example the next files of a collection) are paused too, every couple of seconds.

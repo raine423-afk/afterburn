@@ -155,7 +155,14 @@ public class MainWindowViewModel : AViewModel<IMainWindowViewModel>, IMainWindow
                     var workspaceController = self.WorkspaceController;
 
                     var tuple = self.GetWorkspaceIdForGame(workspaceController, message.Revision.Collection.GameId);
-                    if (!tuple.HasValue) return;
+                    if (!tuple.HasValue)
+                    {
+                        self._notificationService.ShowToast(
+                            $"\"{message.Revision.Collection.Name}\" was saved to your library. Add Cyberpunk 2077 under My Games, then open it from Library > Collections to install.",
+                            ToastNotificationVariant.Neutral
+                        );
+                        return;
+                    }
 
                     var (loadoutId, workspaceId) = tuple.Value;
 
@@ -186,6 +193,12 @@ public class MainWindowViewModel : AViewModel<IMainWindowViewModel>, IMainWindow
                 {
                     switch (message.Reason)
                     {
+                        case FailureReason.NotLoggedIn:
+                            self._notificationService.ShowToast(
+                                "Log in to Nexus Mods first (top-right button), then click the collection's button on the website again.",
+                                ToastNotificationVariant.Failure
+                            );
+                            return;
                         case FailureReason.GameNotManaged gameNotManaged:
                             self._notificationService.ShowToast(
                                 string.Format(Language.ToastNotification_Collection_Add_failed___0__is_not_a_managed_game, gameNotManaged.Game),

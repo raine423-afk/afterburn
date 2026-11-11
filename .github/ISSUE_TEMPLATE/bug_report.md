@@ -6,6 +6,8 @@ labels: bug
 
 > Afterburn is a community fork and is **not** supported by Nexus Mods. Please don't contact Nexus Mods about Afterburn issues.
 
+**Easiest way:** in Afterburn, click **Report a bug** (bottom bar or the ? menu). It copies a diagnostic report with your personal details removed and opens this page. Just paste it below with Ctrl+V.
+
 **What happened?**
 
 **What did you expect to happen?**
@@ -18,4 +20,4 @@ labels: bug
 
 **Cyberpunk 2077 version and store** (e.g. 2.5, Steam):
 
-**Logs** — attach `%LOCALAPPDATA%\NexusMods.App\Logs\nexusmods.app.main.current.log` (remove anything private first).
+**Diagnostic report** (paste from the Report a bug button, or attach `%LOCALAPPDATA%\NexusMods.App\Logs\nexusmods.app.main.current.log` after removing anything private):

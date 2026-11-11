@@ -225,6 +225,14 @@
                                 Fill="None"
                                 ShowIcon="Left"
                                 LeftIcon="{x:Static icons:IconValues.NexusColor}"/>
+                            <controls:StandardButton
+                                x:Name="AddCollectionFromLinkButton"
+                                Text="Paste collection link"
+                                Type="Primary"
+                                Size="Toolbar"
+                                ShowIcon="Left"
+                                LeftIcon="{x:Static icons:IconValues.Paste}"
+                                ToolTip.Tip="Copy a collection's address from nexusmods.com, then click here to add it."/>
                         </ItemsControl>
                     </controls:Toolbar>
 

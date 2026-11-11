@@ -57,12 +57,12 @@
                 VerticalAlignment="Center" />
             
             <!-- feedback button -->
-            <controls:StandardButton x:Name="GiveFeedbackButton"
-                                     Text="Give Feedback"
+            <controls:StandardButton x:Name="ReportBugButton"
+                                     Text="Report a bug"
                                      Type="Secondary"
                                      Fill="Strong"
                                      Size="Small"
-                                     LeftIcon="{x:Static icons:IconValues.ThumbsUpDownOutline}"
+                                     LeftIcon="{x:Static icons:IconValues.Warning}"
                                      ShowIcon="Left"
                                      ToolTip.Tip="{x:Static resources:Language.TopBar_GiveFeedback_ToolTip}"
                                      Margin="8,0,0,0"/>

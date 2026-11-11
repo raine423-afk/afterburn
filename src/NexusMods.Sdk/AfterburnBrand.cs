@@ -23,7 +23,7 @@ public static class AfterburnBrand
     public const string GitHubOwner = "raine423-afk";
 
     /// <summary>GitHub repository name.</summary>
-    public const string GitHubRepository = "Afterburn";
+    public const string GitHubRepository = "afterburn";
 
     /// <summary>Project page.</summary>
     public static readonly Uri ProjectUri = new($"https://github.com/{GitHubOwner}/{GitHubRepository}");

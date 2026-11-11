@@ -8,6 +8,8 @@
 > "Nexus Mods" and the Nexus Mods logo are trademarks of their owner and are used here only to describe where Afterburn comes from and which service it connects to.
 > Please don't ask Nexus Mods for help with Afterburn. Use this repository's Issues page instead.
 
+> **AI disclosure:** Afterburn's modifications to the upstream code were developed with AI assistance (Claude, by Anthropic), under human direction and testing. The changes are listed in `NOTICE.md` and the commit history.
+
 ## What's different from the Nexus Mods app
 
 - **Cyberpunk 2077 only:** support for all other games was removed to keep Afterburn focused.
@@ -18,6 +20,16 @@
 - **No telemetry:** usage data is never sent anywhere.
 
 See [NOTICE.md](NOTICE.md) for the full list of changes.
+
+## Adding a Cyberpunk 2077 collection
+
+1. Log in to Nexus Mods in Afterburn (top-right button).
+2. Then either:
+   - On the collection's page on nexusmods.com, click the button to add it to your mod manager. Afterburn opens it automatically. If your browser asks which app to use, pick **Afterburn**.
+   - Or copy the collection's address from your browser's address bar. In Afterburn, go to **Library → Collections** and click **Paste collection link**.
+3. Afterburn opens the collection page. Click **Download**, then **Install**.
+
+Free Nexus Mods accounts must click each mod's download on the website. This is a Nexus Mods rule, and Afterburn walks you through it. Premium accounts download everything automatically.
 
 ## Status
 
@@ -36,7 +48,7 @@ cd afterburn
 dotnet publish src/NexusMods.App/NexusMods.App.csproj -c Release -r win-x64 --self-contained false -o publish
 ```
 
-Run `publish/NexusMods.App.exe`. Internal project names still use the `NexusMods.*` prefix inherited from upstream. They're code identifiers, not branding.
+Run `publish/Afterburn.exe`. Internal project names still use the `NexusMods.*` prefix inherited from upstream. They're code identifiers, not branding.
 
 ## Download and install
 
