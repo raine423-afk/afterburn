@@ -1157,6 +1157,8 @@ public class LibraryTreeDataGridAdapter :
         _connection = serviceProvider.GetRequiredService<IConnection>();
     }
 
+    protected override bool BuildRowsInBackground => true;
+
     protected override IObservable<IChangeSet<CompositeItemModel<EntityId>, EntityId>> GetRootsObservable(bool viewHierarchical)
     {
         return _libraryDataProviders.Select(x => x.ObserveLibraryItems(_libraryFilter)).MergeChangeSets();

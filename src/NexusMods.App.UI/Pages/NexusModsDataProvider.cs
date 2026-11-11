@@ -69,15 +69,11 @@ public class NexusModsDataProvider : ILibraryDataProvider, ILoadoutDataProvider
 
     private IObservable<IChangeSet<NexusModsModPageMetadata.ReadOnly, EntityId>> FilterLibraryItems(LibraryFilter libraryFilter)
     {
-        return NexusModsModPageMetadata
-            .ObserveAll(_connection)
-            // only show mod pages for the currently selected game
-            .FilterImmutable(modPage => modPage.Uid.GameId == libraryFilter.Game.NexusModsGameId)
-            // only show mod pages that have library files
-            .FilterOnObservable(modPage => _connection
-                .ObserveDatoms(NexusModsLibraryItem.ModPageMetadata, modPage)
-                .IsNotEmpty()
-            );
+        // Afterburn: driven by the shared library snapshot instead of database watchers per mod page.
+        return LibrarySnapshots.Observe(_connection, libraryFilter)
+            .Select(static snapshot => (IEnumerable<EntityId>)snapshot.ItemsByModPage.Keys.ToArray())
+            .ToDiffChangeSet(static id => id, static (a, b) => a.Equals(b))
+            .Transform(id => NexusModsModPageMetadata.Load(_connection.Db, id));
     }
 
     public IObservable<IChangeSet<CompositeItemModel<EntityId>, EntityId>> ObserveLibraryItems(LibraryFilter libraryFilter)
@@ -92,13 +88,19 @@ public class NexusModsDataProvider : ILibraryDataProvider, ILoadoutDataProvider
 
     private CompositeItemModel<EntityId> ToLibraryItemModel(NexusModsModPageMetadata.ReadOnly modPage, LibraryFilter libraryFilter)
     {
-        var libraryItems = _connection
-            .ObserveDatoms(NexusModsLibraryItem.ModPageMetadata, modPage)
-            .AsEntityIds()
-            .Transform(datom => NexusModsLibraryItem.Load(_connection.Db, datom.E))
+        // Afterburn: everything this row shows comes from the shared library snapshot.
+        var snapshots = LibrarySnapshots.Observe(_connection, libraryFilter);
+        var modPageId = modPage.Id;
+
+        var libraryItems = snapshots
+            .Select(snapshot => (IEnumerable<NexusModsLibraryItem.ReadOnly>)snapshot.ItemsFor(modPageId))
+            .ToDiffChangeSet(static item => item.Id, static (a, b) => a.Id.Equals(b.Id))
             .RefCount();
 
-        var linkedLoadoutItemsObservable = libraryItems.MergeManyChangeSets(libraryItem => LibraryDataProviderHelper.GetLinkedLoadoutItems(_connection, libraryFilter, libraryItem.Id));
+        var linkedLoadoutItemsObservable = snapshots
+            .Select(snapshot => (IEnumerable<LoadoutItem.ReadOnly>)snapshot.LinkedForModPage(modPageId))
+            .ToDiffChangeSet(static item => item.Id, static (a, b) => a.Id.Equals(b.Id) && a.HasParent() == b.HasParent() && (!a.HasParent() || a.ParentId.Equals(b.ParentId)))
+            .RefCount();
 
         var hasChildrenObservable = libraryItems.IsNotEmpty();
         var childrenObservable = libraryItems.Transform(libraryItem => ToLibraryItemModel(libraryItem, libraryFilter));
@@ -157,7 +159,7 @@ public class NexusModsDataProvider : ILibraryDataProvider, ILoadoutDataProvider
         ));
         
         // Collections column
-        AddRelatedCollectionsComponentToParent(libraryItems, linkedLoadoutItemsObservable, parentItemModel);
+        AddRelatedCollectionsComponentToParent(modPageId, libraryFilter, linkedLoadoutItemsObservable, parentItemModel);
         
         // Update available
         var newestModPageObservable = _modUpdateService.GetNewestModPageVersionObservable(modPage);
@@ -194,19 +196,9 @@ public class NexusModsDataProvider : ILibraryDataProvider, ILoadoutDataProvider
 
         LibraryDataProviderHelper.AddInstalledDateComponent(parentItemModel, linkedLoadoutItemsObservable);
 
-        var matchesObservable = libraryItems
-            .TransformOnObservable(libraryItem => LibraryDataProviderHelper.GetLinkedLoadoutItems(_connection, libraryFilter, libraryItem.Id).IsNotEmpty())
-            .QueryWhenChanged(query =>
-            {
-                var (numInstalled, numTotal) = (0, 0);
-                foreach (var isInstalled in query.Items)
-                {
-                    numInstalled += isInstalled ? 1 : 0;
-                    numTotal++;
-                }
-
-                return new MatchesData(numInstalled, numTotal);
-            });
+        var matchesObservable = snapshots
+            .Select(snapshot => snapshot.MatchesFor(modPageId))
+            .DistinctUntilChanged();
         
         
         parentItemModel.Add(LibraryColumns.Actions.LibraryItemIdsComponentKey, new LibraryComponents.LibraryItemIds(libraryItems.TransformImmutable(static x => x.AsLibraryItem().LibraryItemId)));
@@ -234,8 +226,11 @@ public class NexusModsDataProvider : ILibraryDataProvider, ILoadoutDataProvider
 
     private CompositeItemModel<EntityId> ToLibraryItemModel(NexusModsLibraryItem.ReadOnly libraryItem, LibraryFilter libraryFilter)
     {
-        var linkedLoadoutItemsObservable = LibraryDataProviderHelper
-            .GetLinkedLoadoutItems(_connection, libraryFilter, libraryItem.Id)
+        // Afterburn: from the shared library snapshot instead of a database watcher per file.
+        var libraryItemId = libraryItem.Id;
+        var linkedLoadoutItemsObservable = LibrarySnapshots.Observe(_connection, libraryFilter)
+            .Select(snapshot => (IEnumerable<LoadoutItem.ReadOnly>)snapshot.LinkedFor(libraryItemId))
+            .ToDiffChangeSet(static item => item.Id, static (a, b) => a.Id.Equals(b.Id) && a.HasParent() == b.HasParent() && (!a.HasParent() || a.ParentId.Equals(b.ParentId)))
             .RefCount();
 
         var fileMetadata = libraryItem.FileMetadata;
@@ -256,7 +251,7 @@ public class NexusModsDataProvider : ILibraryDataProvider, ILoadoutDataProvider
         LibraryDataProviderHelper.AddViewModPageActionComponent(itemModel);
         
         // Collections column
-        AddRelatedCollectionsComponentToChild(libraryItem, linkedLoadoutItemsObservable, itemModel);
+        AddRelatedCollectionsComponentToChild(libraryItem, libraryFilter, linkedLoadoutItemsObservable, itemModel);
 
         // Update available
         var newestVersionObservable = _modUpdateService
@@ -307,67 +302,51 @@ public class NexusModsDataProvider : ILibraryDataProvider, ILoadoutDataProvider
 
     private void AddRelatedCollectionsComponentToChild(
         NexusModsLibraryItem.ReadOnly libraryItem,
+        LibraryFilter libraryFilter,
         IObservable<IChangeSet<LoadoutItem.ReadOnly, EntityId>> linkedLoadoutItemsObservable,
         CompositeItemModel<EntityId> itemModel)
     {
-        var relatedDownloadedCollectionsObservable = _connection
-            .ObserveDatoms(CollectionDownloadNexusMods.FileMetadataId, libraryItem.FileMetadataId)
-            .AsEntityIds()
-            .Distinct()
-            .Transform(datom => NexusMods.Abstractions.NexusModsLibrary.Models.CollectionDownload.Load(_connection.Db, datom.E).CollectionRevision.Collection)
-            .ChangeKey(collection => collection.Id);
+        var fileMetadataId = libraryItem.FileMetadata.Id;
+        var relatedDownloadedCollectionsObservable = LibrarySnapshots.Observe(_connection, libraryFilter)
+            .Select(snapshot => (IEnumerable<CollectionMetadata.ReadOnly>)snapshot.CollectionsFor(fileMetadataId))
+            .ToDiffChangeSet(static c => c.Id, static (a, b) => a.Id.Equals(b.Id));
 
         LibraryDataProviderHelper.AddRelatedCollectionsComponent(itemModel, linkedLoadoutItemsObservable, relatedDownloadedCollectionsObservable);
     }
 
     private void AddRelatedCollectionsComponentToParent(
-        IObservable<IChangeSet<NexusModsLibraryItem.ReadOnly, EntityId>> libraryItems,
+        EntityId modPageId,
+        LibraryFilter libraryFilter,
         IObservable<IChangeSet<LoadoutItem.ReadOnly, EntityId>> linkedLoadoutItemsObservable,
         CompositeItemModel<EntityId> itemModel)
     {
-        var relatedDownloadedCollectionsObservable = libraryItems
-            .MergeManyChangeSets(libraryItem =>
-                _connection.ObserveDatoms(CollectionDownloadNexusMods.FileMetadataId, libraryItem.FileMetadataId)
-                    .AsEntityIds()
-                    .Distinct()
-                    .Transform(datom => NexusMods.Abstractions.NexusModsLibrary.Models.CollectionDownload
-                        .Load(_connection.Db, datom.E)
-                        .CollectionRevision.Collection
-                    )
-                    .ChangeKey(collection => collection.Id)
-                    .Distinct()
-            );
+        var relatedDownloadedCollectionsObservable = LibrarySnapshots.Observe(_connection, libraryFilter)
+            .Select(snapshot => (IEnumerable<CollectionMetadata.ReadOnly>)snapshot.CollectionsForModPage(modPageId))
+            .ToDiffChangeSet(static c => c.Id, static (a, b) => a.Id.Equals(b.Id));
 
         LibraryDataProviderHelper.AddRelatedCollectionsComponent(itemModel, linkedLoadoutItemsObservable, relatedDownloadedCollectionsObservable);
     }
 
     private IObservable<IChangeSet<NexusModsModPageMetadata.ReadOnly, EntityId>> FilterLoadoutItems(LoadoutFilter loadoutFilter)
     {
-        return NexusModsModPageMetadata
-            .ObserveAll(_connection)
-            .FilterOnObservable((_, modPageEntityId) => _connection
-                .ObserveDatoms(NexusModsLibraryItem.ModPageMetadataId, modPageEntityId)
-                .FilterOnObservable((d, _) => _connection
-                    .ObserveDatoms(LibraryLinkedLoadoutItem.LibraryItemId, d.E)
-                    .AsEntityIds()
-                    .FilterInStaticLoadout(_connection, loadoutFilter)
-                    .IsNotEmpty())
-                .IsNotEmpty()
-            );
+        // Afterburn: one shared snapshot of the loadout instead of database watchers for every mod page and file.
+        return LoadoutSnapshots.Observe(_connection, loadoutFilter)
+            .RowKeys(static snapshot => snapshot.ByNexusModPage)
+            .Transform(id => NexusModsModPageMetadata.Load(_connection.Db, id));
     }
 
     public IObservable<IChangeSet<CompositeItemModel<EntityId>, EntityId>> ObserveLoadoutItems(LoadoutFilter loadoutFilter)
     {
+        var snapshots = LoadoutSnapshots.Observe(_connection, loadoutFilter);
+
         return FilterLoadoutItems(loadoutFilter).Transform(modPage =>
         {
-            var linkedItemsObservable = _connection
-                .ObserveDatoms(NexusModsLibraryItem.ModPageMetadataId, modPage.Id).AsEntityIds()
-                .FilterOnObservable((_, e) => _connection.ObserveDatoms(LibraryLinkedLoadoutItem.LibraryItemId, e).IsNotEmpty())
-                // NOTE(erri120): DynamicData 9.0.4 is broken for value types because it uses ReferenceEquals. Temporary workaround is a custom equality comparer.
-                .MergeManyChangeSets((_, e) => _connection.ObserveDatoms(LibraryLinkedLoadoutItem.LibraryItemId, e).AsEntityIds(), equalityComparer: DatomEntityIdEqualityComparer.Instance)
-                .FilterInStaticLoadout(_connection, loadoutFilter)
-                .Transform(datom => LoadoutItem.Load(_connection.Db, datom.E))
-                .RefCount();
+            var modPageId = modPage.Id;
+
+            // Afterburn: everything a row shows comes from the shared snapshot. A row only hears about a change when
+            // one of its own files was added, removed, enabled, disabled or moved.
+            var rowItems = snapshots.RowItems(snapshot => snapshot.ItemsFor(modPageId));
+            var linkedItemsObservable = rowItems.LinkedItems();
 
             var hasChildrenObservable = linkedItemsObservable.IsNotEmpty();
             var childrenObservable = linkedItemsObservable.Transform(loadoutItem => ToNexusChildLoadoutItemModel(_connection, loadoutItem));
@@ -383,10 +362,10 @@ public class NexusModsDataProvider : ILibraryDataProvider, ILoadoutDataProvider
 
             LoadoutDataProviderHelper.AddDateComponent(parentItemModel, modPage.GetCreatedAt(), linkedItemsObservable);
             LoadoutDataProviderHelper.AddCollections(parentItemModel, linkedItemsObservable);
-            LoadoutDataProviderHelper.AddParentCollectionsDisabled(_connection, parentItemModel, linkedItemsObservable);
-            LoadoutDataProviderHelper.AddMixLockedAndParentDisabled(_connection, parentItemModel, linkedItemsObservable);
+            LoadoutDataProviderHelper.AddParentCollectionsDisabled(parentItemModel, rowItems);
+            LoadoutDataProviderHelper.AddMixLockedAndParentDisabled(parentItemModel, rowItems);
             LoadoutDataProviderHelper.AddLockedEnabledStates(parentItemModel, linkedItemsObservable);
-            LoadoutDataProviderHelper.AddEnabledStateToggle(_connection, parentItemModel, linkedItemsObservable);
+            LoadoutDataProviderHelper.AddEnabledStateToggle(parentItemModel, rowItems);
             LoadoutDataProviderHelper.AddLoadoutItemIds(parentItemModel, linkedItemsObservable);
             LoadoutDataProviderHelper.AddViewModPageActionComponent(parentItemModel, isEnabled: true);
             LoadoutDataProviderHelper.AddViewModFilesActionComponent(parentItemModel, linkedItemsObservable);
@@ -395,7 +374,7 @@ public class NexusModsDataProvider : ILibraryDataProvider, ILoadoutDataProvider
             return parentItemModel;
         });
     }
-    
+
     private static CompositeItemModel<EntityId> ToNexusChildLoadoutItemModel(IConnection connection, LoadoutItem.ReadOnly loadoutItem)
     {
         var childModel = LoadoutDataProviderHelper.ToChildItemModel(connection, loadoutItem);

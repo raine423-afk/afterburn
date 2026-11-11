@@ -50,7 +50,10 @@ public static class LibraryDataProviderHelper
         var libraryDataProviders = serviceProvider.GetServices<ILibraryDataProvider>();
         return libraryDataProviders
             .Select(provider => provider.CountLibraryItems(libraryFilter))
-            .CombineLatest(static counts => counts.Sum());
+            .CombineLatest(static counts => counts.Sum())
+            // Afterburn: count on a background thread. Counting reads the whole library, and the menu, header and
+            // loadout card all ask for it when the app opens; every caller already moves the result to the UI thread.
+            .SubscribeOn(System.Reactive.Concurrency.TaskPoolScheduler.Default);
     }
 
     public static IObservable<IChangeSet<LoadoutItem.ReadOnly, EntityId>> GetLinkedLoadoutItems(

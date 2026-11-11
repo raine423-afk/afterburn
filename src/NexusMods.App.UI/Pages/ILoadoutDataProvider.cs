@@ -47,7 +47,10 @@ public static class LoadoutDataProviderHelper
         var loadoutDataProviders = serviceProvider.GetServices<ILoadoutDataProvider>();
         return loadoutDataProviders
             .Select(provider => provider.CountLoadoutItems(loadoutFilter))
-            .CombineLatest(static counts => counts.Sum());
+            .CombineLatest(static counts => counts.Sum())
+            // Afterburn: count on a background thread. Counting reads the whole loadout, and the menu, header and
+            // loadout card all ask for it when the app opens; every caller already moves the result to the UI thread.
+            .SubscribeOn(System.Reactive.Concurrency.TaskPoolScheduler.Default);
     }
 
     public static ChangeSet<LoadoutItem.ReadOnly, EntityId> GetLinkedLoadoutItems(
@@ -330,6 +333,84 @@ public static class LoadoutDataProviderHelper
         ));
     }
     
+    // ------------------------------------------------------------------ Afterburn: snapshot-based row state
+
+    /// <summary>Same as the observable version, computed from the shared loadout snapshot (no database watchers).</summary>
+    public static void AddParentCollectionsDisabled(CompositeItemModel<EntityId> parentItemModel, IObservable<SnapshotItem[]> rowItems)
+    {
+        var shouldAdd = rowItems
+            .Select(static items => items.All(static i => i.IsInCollection && i.IsParentCollectionDisabled))
+            .DistinctUntilChanged()
+            .ToObservable();
+
+        parentItemModel.AddObservable(
+            key: LoadoutColumns.EnabledState.ParentCollectionDisabledComponentKey,
+            shouldAddObservable: shouldAdd,
+            componentFactory: () => new LoadoutComponents.ParentCollectionDisabled()
+        );
+    }
+
+    /// <summary>Same as the observable version, computed from the shared loadout snapshot (no database watchers).</summary>
+    public static void AddMixLockedAndParentDisabled(CompositeItemModel<EntityId> parentItemModel, IObservable<SnapshotItem[]> rowItems)
+    {
+        var shouldAdd = rowItems
+            .Select(static items =>
+            {
+                var hasLocked = false;
+                var hasParentDisabled = false;
+                foreach (var item in items)
+                {
+                    var isParentDisabled = item.IsInCollection && item.IsParentCollectionDisabled;
+                    if (isParentDisabled) hasParentDisabled = true;
+                    if (item.IsLocked && !isParentDisabled) hasLocked = true;
+                    if (!item.IsLocked && !isParentDisabled) return false;
+                }
+
+                return hasLocked && hasParentDisabled;
+            })
+            .DistinctUntilChanged()
+            .ToObservable();
+
+        parentItemModel.AddObservable(
+            key: LoadoutColumns.EnabledState.MixLockedAndParentDisabledComponentKey,
+            shouldAddObservable: shouldAdd,
+            componentFactory: () => new LoadoutComponents.MixLockedAndParentDisabled()
+        );
+    }
+
+    /// <summary>Same as the observable version, computed from the shared loadout snapshot (no database watchers).</summary>
+    public static void AddEnabledStateToggle(CompositeItemModel<EntityId> parentItemModel, IObservable<SnapshotItem[]> rowItems)
+    {
+        var isEnabledObservable = rowItems
+            .Select(static items =>
+            {
+                bool? state = null;
+                var first = true;
+                foreach (var item in items)
+                {
+                    if (first)
+                    {
+                        state = item.IsEnabled;
+                        first = false;
+                    }
+                    else if (state != item.IsEnabled)
+                    {
+                        return (bool?)null;
+                    }
+                }
+
+                return state;
+            })
+            .DistinctUntilChanged();
+
+        parentItemModel.Add(LoadoutColumns.EnabledState.EnabledStateToggleComponentKey, new LoadoutComponents.EnabledStateToggle(
+            valueComponent: new ValueComponent<bool?>(
+                initialValue: true,
+                valueObservable: isEnabledObservable
+            )
+        ));
+    }
+
     public static void AddLoadoutItemIds(
         CompositeItemModel<EntityId> parentItemModel,
         IObservable<IChangeSet<LoadoutItem.ReadOnly, EntityId>> linkedItemsObservable)

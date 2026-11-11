@@ -95,14 +95,10 @@ internal class ManuallyCreatedArchiveDataProvider : ILibraryDataProvider, ILoado
 
     private IObservable<IChangeSet<ManuallyCreatedArchive.ReadOnly, EntityId>> FilterLoadoutItems(LoadoutFilter loadoutFilter)
     {
-        return ManuallyCreatedArchive
-            .ObserveAll(_connection)
-            .FilterOnObservable((_, entityId) => _connection
-                .ObserveDatoms(LibraryLinkedLoadoutItem.LibraryItemId, entityId)
-                .AsEntityIds()
-                .FilterInStaticLoadout(_connection, loadoutFilter)
-                .IsNotEmpty()
-            );
+        // Afterburn: driven by the shared loadout snapshot instead of database watchers per archive.
+        return LoadoutSnapshots.Observe(_connection, loadoutFilter)
+            .RowKeys(static snapshot => snapshot.ByManualArchive)
+            .Transform(id => ManuallyCreatedArchive.Load(_connection.Db, id));
     }
 
     public IObservable<IChangeSet<CompositeItemModel<EntityId>, EntityId>> ObserveLoadoutItems(LoadoutFilter loadoutFilter)
@@ -117,11 +113,9 @@ internal class ManuallyCreatedArchiveDataProvider : ILibraryDataProvider, ILoado
 
     private CompositeItemModel<EntityId> ToLoadoutItemModel(LoadoutFilter loadoutFilter, ManuallyCreatedArchive.ReadOnly archive)
     {
-        var linkedItemsObservable = _connection.ObserveDatoms(LibraryLinkedLoadoutItem.LibraryItem, archive)
-            .AsEntityIds()
-            .FilterInStaticLoadout(_connection, loadoutFilter)
-            .Transform(datom => LoadoutItem.Load(_connection.Db, datom.E))
-            .RefCount();
+        var archiveId = archive.Id;
+        var rowItems = LoadoutSnapshots.Observe(_connection, loadoutFilter).RowItems(snapshot => snapshot.ManualItemsFor(archiveId));
+        var linkedItemsObservable = rowItems.LinkedItems();
 
         var hasChildrenObservable = linkedItemsObservable.IsNotEmpty();
         var childrenObservable = linkedItemsObservable.Transform(loadoutItem => LoadoutDataProviderHelper.ToChildItemModel(_connection, loadoutItem));
@@ -137,10 +131,10 @@ internal class ManuallyCreatedArchiveDataProvider : ILibraryDataProvider, ILoado
 
         LoadoutDataProviderHelper.AddDateComponent(parentItemModel, archive.GetCreatedAt(), linkedItemsObservable);
         LoadoutDataProviderHelper.AddCollections(parentItemModel, linkedItemsObservable);
-        LoadoutDataProviderHelper.AddParentCollectionsDisabled(_connection, parentItemModel, linkedItemsObservable);
-        LoadoutDataProviderHelper.AddMixLockedAndParentDisabled(_connection, parentItemModel, linkedItemsObservable);
+        LoadoutDataProviderHelper.AddParentCollectionsDisabled(parentItemModel, rowItems);
+        LoadoutDataProviderHelper.AddMixLockedAndParentDisabled(parentItemModel, rowItems);
         LoadoutDataProviderHelper.AddLockedEnabledStates(parentItemModel, linkedItemsObservable);
-        LoadoutDataProviderHelper.AddEnabledStateToggle(_connection, parentItemModel, linkedItemsObservable);
+        LoadoutDataProviderHelper.AddEnabledStateToggle(parentItemModel, rowItems);
         LoadoutDataProviderHelper.AddLoadoutItemIds(parentItemModel, linkedItemsObservable);
         LoadoutDataProviderHelper.AddViewModFilesActionComponent(parentItemModel, linkedItemsObservable);
         LoadoutDataProviderHelper.AddUninstallItemComponent(parentItemModel, linkedItemsObservable);

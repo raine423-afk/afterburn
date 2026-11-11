@@ -19,6 +19,8 @@ public sealed class DownloadsTreeDataGridAdapter(IServiceProvider serviceProvide
 {
     public Subject<OneOf<PauseMessage, ResumeMessage, CancelMessage>> MessageSubject { get; } = new();
 
+    protected override bool BuildRowsInBackground => true;
+
     protected override IObservable<IChangeSet<CompositeItemModel<DownloadId>, DownloadId>> GetRootsObservable(bool viewHierarchical)
     {
         return provider.ObserveDownloads(filter);

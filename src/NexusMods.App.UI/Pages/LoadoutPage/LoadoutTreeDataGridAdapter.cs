@@ -35,6 +35,8 @@ public class LoadoutTreeDataGridAdapter :
         _connection = serviceProvider.GetRequiredService<IConnection>();
     }
 
+    protected override bool BuildRowsInBackground => true;
+
     protected override IObservable<IChangeSet<CompositeItemModel<EntityId>, EntityId>> GetRootsObservable(bool viewHierarchical)
     {
         return _loadoutDataProviders.Select(x => x.ObserveLoadoutItems(_loadoutFilter)).MergeChangeSets();

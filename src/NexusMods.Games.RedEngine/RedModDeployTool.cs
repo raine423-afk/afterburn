@@ -84,6 +84,15 @@ public class RedModDeployTool : ITool
         }
     }
 
+    /// <summary>
+    /// Afterburn: the REDmod load order exactly as it is passed to redMod.exe (one mod per line).
+    /// </summary>
+    internal string GetLoadOrderText(Loadout.ReadOnly loadout)
+    {
+        var order = _redModSortOrderVariety.GetRedModOrder(loadout, Optional.None<CollectionGroupId>(), loadout.Db);
+        return order.Count > 0 ? string.Join("\r\n", order) : string.Empty;
+    }
+
     internal async Task WriteLoadOrderFile(AbsolutePath loadorderFilePath, Loadout.ReadOnly loadout)
     {
         // TODO: this currently uses the loadout sort order, change this to use the "Active" sort order,

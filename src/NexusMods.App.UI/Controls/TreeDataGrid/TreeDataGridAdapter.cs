@@ -145,9 +145,21 @@ public abstract class TreeDataGridAdapter<TModel, TKey> : ReactiveR3Object, ISea
                 })
                 .Select(self, static (viewHierarchical, self) =>
                 {
-                    return self
-                        .GetRootsObservable(viewHierarchical)
-                        .OnUI()
+                    // Afterburn: collect incoming row changes for a moment and apply them together. Every applied change
+                    // set refreshes the whole list on the UI thread, so a big collection arriving in many small pieces used
+                    // to freeze the screen for seconds; batching turns dozens of refreshes into a few.
+                    // Big batches are then split into small chunks that run at background priority on the UI thread,
+                    // so the window keeps drawing and responding while a large list fills in.
+                    // Afterburn: lists that opt in start building their rows on a background thread. Without this, a
+                    // list whose data was already loaded (for example when you come back to a page) built every row
+                    // on the UI thread the moment the page opened, freezing the window for one to two seconds.
+                    var roots = self.GetRootsObservable(viewHierarchical);
+                    if (self.BuildRowsInBackground) roots = roots.SubscribeOn(System.Reactive.Concurrency.TaskPoolScheduler.Default);
+
+                    return DynamicData.ObservableCacheEx
+                        .Batch(roots, TimeSpan.FromMilliseconds(150))
+                        .SelectMany(static changeSet => SplitChangeSet(changeSet, ChunkSize))
+                        .ObserveOn(BackgroundUiScheduler.Instance)
                         .Do(changeSet =>
                         {
                             // NOTE(erri120): We activate all items before adding them to Roots
@@ -169,8 +181,22 @@ public abstract class TreeDataGridAdapter<TModel, TKey> : ReactiveR3Object, ISea
                             {
                                 self.Roots.Sort(self.CustomSortComparer.Value);
                             }
+
+                            // Afterburn: release rows that left the list (what DisposeMany used to do). Rows still in the
+                            // list when the page closes are released in the background instead of all at once on the
+                            // UI thread.
+                            foreach (var change in changeSet)
+                            {
+                                if (change.Reason == ChangeReason.Remove)
+                                {
+                                    change.Current.Dispose();
+                                }
+                                else if (change.Reason == ChangeReason.Update && change.Previous.HasValue && !ReferenceEquals(change.Previous.Value, change.Current))
+                                {
+                                    change.Previous.Value.Dispose();
+                                }
+                            }
                         })
-                        .DisposeMany()
                         .ToObservable()
                         .Select(viewHierarchical, static (_, viewHierarchical) => viewHierarchical);
                 })
@@ -196,14 +222,50 @@ public abstract class TreeDataGridAdapter<TModel, TKey> : ReactiveR3Object, ISea
 
             Disposable.Create(self, static self =>
             {
-                foreach (var root in self.Roots)
-                {
-                    root.Dispose();
-                }
-
+                // Afterburn: detach the rows from the list right away, and release them in the background so leaving
+                // a page with thousands of rows doesn't freeze the window.
+                var rows = self.Roots.ToArray();
                 self.Roots.Clear();
+                if (rows.Length == 0) return;
+
+                _ = Task.Run(() =>
+                {
+                    foreach (var row in rows)
+                    {
+                        try { row.Dispose(); }
+                        catch { /* a row that fails to clean up must not take the app down */ }
+                    }
+                });
             }).AddTo(disposables);
         });
+    }
+
+    private const int ChunkSize = 100;
+
+    /// <summary>
+    /// When true, the row source is subscribed to on a background thread so building rows never blocks the UI.
+    /// Only turn this on for lists whose data sources don't need the UI thread when they start.
+    /// </summary>
+    protected virtual bool BuildRowsInBackground => false;
+
+    private static IEnumerable<IChangeSet<TModel, TKey>> SplitChangeSet(IChangeSet<TModel, TKey> changeSet, int chunkSize)
+    {
+        if (changeSet.Count <= chunkSize)
+        {
+            yield return changeSet;
+            yield break;
+        }
+
+        var chunk = new List<Change<TModel, TKey>>(chunkSize);
+        foreach (var change in changeSet)
+        {
+            chunk.Add(change);
+            if (chunk.Count < chunkSize) continue;
+            yield return new ChangeSet<TModel, TKey>(chunk);
+            chunk = new List<Change<TModel, TKey>>(chunkSize);
+        }
+
+        if (chunk.Count > 0) yield return new ChangeSet<TModel, TKey>(chunk);
     }
 
     public void ClearSelection() => _selectionModel?.Clear();

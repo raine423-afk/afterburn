@@ -120,14 +120,10 @@ internal class LocalFileDataProvider : ILibraryDataProvider, ILoadoutDataProvide
 
     private IObservable<IChangeSet<LocalFile.ReadOnly, EntityId>> FilterLoadoutItems(LoadoutFilter loadoutFilter)
     {
-        return LocalFile
-            .ObserveAll(_connection)
-            .FilterOnObservable((_, entityId) => _connection
-                .ObserveDatoms(LibraryLinkedLoadoutItem.LibraryItemId, entityId)
-                .AsEntityIds()
-                .FilterInStaticLoadout(_connection, loadoutFilter)
-                .IsNotEmpty()
-            );
+        // Afterburn: driven by the shared loadout snapshot instead of database watchers per file.
+        return LoadoutSnapshots.Observe(_connection, loadoutFilter)
+            .RowKeys(static snapshot => snapshot.ByLocalFile)
+            .Transform(id => LocalFile.Load(_connection.Db, id));
     }
 
     public IObservable<IChangeSet<CompositeItemModel<EntityId>, EntityId>> ObserveLoadoutItems(LoadoutFilter loadoutFilter)
@@ -142,11 +138,9 @@ internal class LocalFileDataProvider : ILibraryDataProvider, ILoadoutDataProvide
 
     private CompositeItemModel<EntityId> ToLoadoutItemModel(LoadoutFilter loadoutFilter, LocalFile.ReadOnly localFile)
     {
-        var linkedItemsObservable = _connection.ObserveDatoms(LibraryLinkedLoadoutItem.LibraryItem, localFile)
-            .AsEntityIds()
-            .FilterInStaticLoadout(_connection, loadoutFilter)
-            .Transform(datom => LoadoutItem.Load(_connection.Db, datom.E))
-            .RefCount();
+        var localFileId = localFile.Id;
+        var rowItems = LoadoutSnapshots.Observe(_connection, loadoutFilter).RowItems(snapshot => snapshot.LocalItemsFor(localFileId));
+        var linkedItemsObservable = rowItems.LinkedItems();
 
         var hasChildrenObservable = linkedItemsObservable.IsNotEmpty();
         var childrenObservable = linkedItemsObservable.Transform(loadoutItem => ToLocalChildLoadoutItemModel(_connection, loadoutItem));
@@ -162,10 +156,10 @@ internal class LocalFileDataProvider : ILibraryDataProvider, ILoadoutDataProvide
 
         LoadoutDataProviderHelper.AddDateComponent(parentItemModel, localFile.GetCreatedAt(), linkedItemsObservable);
         LoadoutDataProviderHelper.AddCollections(parentItemModel, linkedItemsObservable);
-        LoadoutDataProviderHelper.AddParentCollectionsDisabled(_connection, parentItemModel, linkedItemsObservable);
-        LoadoutDataProviderHelper.AddMixLockedAndParentDisabled(_connection, parentItemModel, linkedItemsObservable);
+        LoadoutDataProviderHelper.AddParentCollectionsDisabled(parentItemModel, rowItems);
+        LoadoutDataProviderHelper.AddMixLockedAndParentDisabled(parentItemModel, rowItems);
         LoadoutDataProviderHelper.AddLockedEnabledStates(parentItemModel, linkedItemsObservable);
-        LoadoutDataProviderHelper.AddEnabledStateToggle(_connection, parentItemModel, linkedItemsObservable);
+        LoadoutDataProviderHelper.AddEnabledStateToggle(parentItemModel, rowItems);
         LoadoutDataProviderHelper.AddLoadoutItemIds(parentItemModel, linkedItemsObservable);
         LoadoutDataProviderHelper.AddViewModPageActionComponent(parentItemModel, isEnabled: false);
         LoadoutDataProviderHelper.AddViewModFilesActionComponent(parentItemModel, linkedItemsObservable);

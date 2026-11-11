@@ -62,8 +62,76 @@ public class Cyberpunk2077Synchronizer : ALoadoutSynchronizer
             return loadout;
         }
 
+        // Afterburn: redMod.exe deploy -force rebuilds everything and the second sync that follows it takes seconds on
+        // large loadouts. Skip both when nothing REDmod depends on has changed since the last deploy in this session.
+        var fingerprint = TryGetRedModFingerprint(loadout);
+        if (fingerprint is not null
+            && LastRedModDeploy.TryGetValue(loadout.Id, out var lastFingerprint)
+            && string.Equals(lastFingerprint, fingerprint, StringComparison.Ordinal)
+            && HasRedModDeployOutput(loadout))
+        {
+            Logger.LogInformation("REDmod: nothing changed since the last deploy, skipping redMod deploy");
+            return loadout;
+        }
+
         await _redModTool.Execute(loadout, CancellationToken.None);
-        return await base.Synchronize(loadout, job);
+        var synchronized = await base.Synchronize(loadout, job);
+
+        var after = TryGetRedModFingerprint(synchronized);
+        if (after is not null) LastRedModDeploy[loadout.Id] = after;
+        else LastRedModDeploy.TryRemove(loadout.Id, out _);
+        return synchronized;
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<NexusMods.MnemonicDB.Abstractions.EntityId, string> LastRedModDeploy = new();
+
+    /// <summary>
+    /// Everything redMod.exe deploy depends on: the REDmod load order, every file in the game's "mods" folder (path, size,
+    /// time) and the game executable (so a game update triggers a new deploy). Returns null if it can't be worked out,
+    /// in which case REDmod always deploys, exactly as before.
+    /// </summary>
+    private string? TryGetRedModFingerprint(Loadout.ReadOnly loadout)
+    {
+        try
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.Append(_redModTool.GetLoadOrderText(loadout)).Append('\n');
+
+            var gameRoot = loadout.InstallationInstance.Locations.ToAbsolutePath(new GamePath(LocationId.Game, "")).ToString();
+            var exe = new FileInfo(Path.Combine(gameRoot, "bin", "x64", "Cyberpunk2077.exe"));
+            sb.Append(exe.Exists ? $"{exe.Length}|{exe.LastWriteTimeUtc.Ticks}" : "no-exe").Append('\n');
+
+            var modsDir = new DirectoryInfo(Path.Combine(gameRoot, "mods"));
+            if (modsDir.Exists)
+            {
+                foreach (var file in modsDir.EnumerateFiles("*", SearchOption.AllDirectories)
+                             .Select(f => (Rel: Path.GetRelativePath(modsDir.FullName, f.FullName), f.Length, f.LastWriteTimeUtc.Ticks))
+                             .OrderBy(x => x.Rel, StringComparer.Ordinal))
+                {
+                    sb.Append(file.Rel).Append('|').Append(file.Length).Append('|').Append(file.Ticks).Append('\n');
+                }
+            }
+
+            return sb.ToString();
+        }
+        catch (Exception e)
+        {
+            Logger.LogDebug(e, "REDmod: couldn't work out whether anything changed; deploying");
+            return null;
+        }
+    }
+
+    private static bool HasRedModDeployOutput(Loadout.ReadOnly loadout)
+    {
+        try
+        {
+            var dir = loadout.InstallationInstance.Locations.ToAbsolutePath(RedModCacheFolder).ToString();
+            return Directory.Exists(dir) && Directory.EnumerateFileSystemEntries(dir).Any();
+        }
+        catch
+        {
+            return false;
+        }
     }
 
 
