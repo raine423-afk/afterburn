@@ -152,74 +152,42 @@ internal sealed class FileHashesService : IFileHashesService, IDisposable, IHost
     {
         using var _ = await _lock.LockAsync();
 
-        var existingDatabases = ExistingDBs().ToArray();
+        // Afterburn: always use the game hashes database built into this version of Afterburn (it includes the
+        // Cyberpunk 2077 versions Afterburn supports). Afterburn never downloads a database: the official one is
+        // fetched without an integrity check and may not know newer game versions, and a newer download (or one left
+        // in the shared folder by the official app) would replace Afterburn's own.
+        var embeddedSeconds = (ApplicationConstants.IsDebug ? DateTimeOffset.UnixEpoch : ApplicationConstants.BuildDate).ToUnixTimeSeconds();
+        if (forceUpdate) _logger.LogInformation("Afterburn uses its built-in game hashes database; nothing to download");
 
-        // Afterburn: the database embedded in this build can be newer than one already on disk
-        // (for example an older database left by the Nexus Mods app). Add it so newer game versions are recognised.
-        // Compare whole seconds: folder names store the time in seconds, so comparing against the exact build time
-        // made the copy on disk always look older and re-imported the database on every launch.
-        if (!ApplicationConstants.IsDebug && existingDatabases.Length > 0 && existingDatabases[0].CreationTime.ToUnixTimeSeconds() < ApplicationConstants.BuildDate.ToUnixTimeSeconds())
+        DatabaseInfo? embedded = ExistingDBs()
+            .Where(db => db.CreationTime.ToUnixTimeSeconds() == embeddedSeconds)
+            .Select(static db => (DatabaseInfo?)db)
+            .FirstOrDefault();
+        if (embedded is null)
         {
-            _logger.LogInformation("Embedded game hashes database is newer than the one on disk, adding it");
-            var embeddedDatabase = await AddEmbeddedDatabase(cancellationToken: cancellationToken);
-            if (embeddedDatabase.HasValue) existingDatabases = ExistingDBs().ToArray();
-        }
-
-        var shouldCheckForUpdate = forceUpdate || existingDatabases.Length == 0 || ShouldCheckForUpdate();
-
-        if (!shouldCheckForUpdate && existingDatabases.TryGetFirst(out var latestDatabase))
-        {
-            _currentDb = OpenDb(latestDatabase);
-            return;
-        }
-
-        Manifest? latestReleaseManifest = null;
-        if (shouldCheckForUpdate)
-        {
-            latestReleaseManifest = await FetchLatestReleaseManifest(GameHashesReleaseFileName, cancellationToken: cancellationToken);
-        }
-
-        if (existingDatabases.Length == 0)
-        {
-            var embeddedDatabaseInfo = await AddEmbeddedDatabase(cancellationToken: cancellationToken);
-            if (latestReleaseManifest is null)
+            _logger.LogInformation("Adding the game hashes database built into this version of Afterburn");
+            var added = await AddEmbeddedDatabase(cancellationToken: cancellationToken);
+            if (!added.HasValue)
             {
-                if (!embeddedDatabaseInfo.HasValue)
+                // Fall back to whatever is already on disk rather than having no database at all.
+                var onDisk = ExistingDBs().ToArray();
+                if (onDisk.Length > 0)
                 {
-                    _logger.LogError("Failed to add embedded game hashes database and failed to fetch latest release manifest, game hashes functionality will be unavailable");
-                    return;
+                    _logger.LogWarning("Failed to add the built-in game hashes database, using the newest one on disk instead");
+                    _currentDb = OpenDb(onDisk[0]);
+                }
+                else
+                {
+                    _logger.LogError("Failed to add the built-in game hashes database, game hashes functionality will be unavailable");
                 }
 
-                _logger.LogWarning("Failed to fetch latest release manifest, defaulting to embedded game hashes database which may be out-of-date");
-                _currentDb = OpenDb(embeddedDatabaseInfo.Value);
                 return;
             }
 
-            Debug.Assert(latestReleaseManifest is not null, "should've returned if we didn't have a manifest");
-            if (embeddedDatabaseInfo.HasValue)
-            {
-                existingDatabases = ExistingDBs().ToArray();
-                Debug.Assert(existingDatabases.Length >= 1, $"should have at least one database but found {existingDatabases.Length}");
-            }
+            embedded = added.Value;
         }
 
-        if (latestReleaseManifest is null && existingDatabases.Length == 0)
-        {
-            _logger.LogError("Failed to fetch the latest release manifest and failed to use the embedded database, game hashes functionality will be unavailable");
-            return;
-        }
-
-        if (latestReleaseManifest is null || existingDatabases[0].CreationTime.ToUnixTimeSeconds() >= latestReleaseManifest.CreatedAt.ToUnixTimeSeconds())
-        {
-            _currentDb = OpenDb(existingDatabases[0]);
-            return;
-        }
-
-        _logger.LogInformation("Fetching latest games hashes database");
-        var releaseDatabaseInfo = await AddReleaseDatabase(latestReleaseManifest, cancellationToken);
-        if (!releaseDatabaseInfo.HasValue) return;
-
-        _currentDb = OpenDb(releaseDatabaseInfo.Value);
+        _currentDb = OpenDb(embedded.Value);
     }
 
     private async ValueTask<Manifest?> FetchLatestReleaseManifest(AbsolutePath storagePath, CancellationToken cancellationToken)
@@ -300,6 +268,13 @@ internal sealed class FileHashesService : IFileHashesService, IDisposable, IHost
             foreach (var fileEntry in zipArchive.Entries)
             {
                 var destinationPath = extractionDirectory.Path.Combine(fileEntry.FullName);
+
+                // Afterburn: never write outside the extraction folder, whatever the entry name says (zip-slip).
+                var root = System.IO.Path.GetFullPath(extractionDirectory.Path.ToString()).TrimEnd('\\', '/') + System.IO.Path.DirectorySeparatorChar;
+                if (!System.IO.Path.GetFullPath(destinationPath.ToString()).StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException($"Game hashes archive entry `{fileEntry.FullName}` points outside the extraction folder");
+
+                if (string.IsNullOrEmpty(fileEntry.Name)) continue; // directory entry
                 destinationPath.Parent.CreateDirectory();
 
                 await using var entryStream = fileEntry.Open();

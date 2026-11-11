@@ -40,6 +40,13 @@ UninstallDisplayName=Afterburn
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
+[InstallDelete]
+; Afterburn: remove program files left by an older version before copying the new ones, so stale libraries never
+; mix with new ones. Only runs when the folder already holds Afterburn.exe, so a folder chosen by mistake is never touched.
+Type: files; Name: "{app}\*.dll"; Check: IsExistingAfterburnFolder
+Type: files; Name: "{app}\*.pdb"; Check: IsExistingAfterburnFolder
+Type: filesandordirs; Name: "{app}\runtimes"; Check: IsExistingAfterburnFolder
+
 [Files]
 Source: "..\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\LICENSE.md"; DestDir: "{app}"; Flags: ignoreversion
@@ -55,3 +62,9 @@ Name: "{autodesktop}\Afterburn"; Filename: "{app}\Afterburn.exe"; Tasks: desktop
 
 [Run]
 Filename: "{app}\Afterburn.exe"; Description: "{cm:LaunchProgram,Afterburn}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function IsExistingAfterburnFolder: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{app}\Afterburn.exe'));
+end;

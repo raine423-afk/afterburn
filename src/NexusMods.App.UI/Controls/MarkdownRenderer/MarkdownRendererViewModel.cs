@@ -64,6 +64,13 @@ public class MarkdownRendererViewModel : AViewModel<IMarkdownRendererViewModel>,
         OpenLinkCommand = ReactiveCommand.Create<string>(url =>
         {
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return;
+            // Afterburn: descriptions are written by mod authors; only open web pages and Nexus download links.
+            if (!UntrustedLinks.IsWebOrNxmLink(uri))
+            {
+                _logger.LogWarning("Not opening a description link with the `{Scheme}` scheme", uri.Scheme);
+                return;
+            }
+
             osInterop.OpenUri(uri);
         });
 

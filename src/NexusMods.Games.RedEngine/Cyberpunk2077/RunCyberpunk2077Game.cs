@@ -42,7 +42,7 @@ public class RunCyberpunk2077Game(IServiceProvider provider, Cyberpunk2077Game g
             if (notifications is null) return;
 
             var text = summary.ToShortText();
-            var variant = summary.DisabledMods.Count > 0 ? ToastNotificationVariant.Failure : ToastNotificationVariant.Success;
+            var variant = summary.BrokenMods.Count > 0 ? ToastNotificationVariant.Failure : ToastNotificationVariant.Success;
             Dispatcher.UIThread.Post(() => notifications.ShowToast(text, variant, TimeSpan.FromSeconds(12)));
         }
         catch (OperationCanceledException)

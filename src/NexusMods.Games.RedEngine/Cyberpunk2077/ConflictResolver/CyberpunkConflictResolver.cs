@@ -15,10 +15,13 @@ namespace NexusMods.Games.RedEngine.Cyberpunk2077.ConflictResolver;
 /// Afterburn: a lightweight, automatic conflict check that runs before Cyberpunk 2077 starts.
 /// <list type="bullet">
 /// <item>Health check: mods whose scripts failed to compile, or whose RED4ext plugin was built for another game
-/// version, on the previous launch are turned off so the game can start.</item>
+/// version, on the previous launch are reported. Nothing is turned off automatically: one outdated framework mod makes
+/// every mod that depends on it show errors, so only the user can tell which mod is really at fault.</item>
 /// <item>Archive conflicts: when two .archive mods replace the same game resource, a load order is written to
-/// archive/pc/mod/modlist.txt so the most specific mod wins (patches and fixes first, then smaller targeted mods,
-/// then the newest).</item>
+/// archive/pc/mod/modlist.txt. Mod authors' own naming is respected (the game loads archives in ASCII order and the
+/// first one wins, so names starting with "#", "!", "_" or a digit are meant to win and names starting with "zz" are
+/// meant to lose); only the remaining conflicts are ordered: patches and fixes first, then smaller targeted mods,
+/// then the newest.</item>
 /// <item>Script conflicts: redscript mods that replace the same game function are reported.</item>
 /// </list>
 /// Everything it does is written to r6/logs/afterburn-conflicts.txt.
@@ -147,7 +150,7 @@ public sealed class CyberpunkConflictResolver
 
         if (brokenPaths.Count == 0) return;
 
-        // Find the mods (loadout groups) that own those files.
+        // Find the mods (loadout groups) that own those files, so the report can name them.
         var groupsToDisable = new Dictionary<EntityId, (string Name, string Reason)>();
         var matchedPrefixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in LoadoutItem.FindByLoadout(loadout.Db, loadout).OfTypeLoadoutItemWithTargetPath())
@@ -168,20 +171,8 @@ public sealed class CyberpunkConflictResolver
         foreach (var (prefix, reason) in brokenPaths.Where(kv => !matchedPrefixes.Contains(kv.Key)))
             summary.Notes.Add($"{prefix}: {reason}, but it wasn't installed by Afterburn, so remove it by hand.");
 
-        if (groupsToDisable.Count == 0) return;
-
-        using (var tx = _connection.BeginTransaction())
-        {
-            foreach (var id in groupsToDisable.Keys)
-                tx.Add(id, LoadoutItem.Disabled, Null.Instance);
-            await tx.Commit();
-        }
-
         foreach (var (name, reason) in groupsToDisable.Values)
-            summary.DisabledMods.Add($"{name} ({reason})");
-
-        // Remove the turned-off mods from the game folder before the game starts.
-        await _synchronizer.Synchronize(loadout.LoadoutId);
+            summary.BrokenMods.Add($"{name} ({reason})");
     }
 
     // ---------------------------------------------------------------- same-file overwrites
@@ -253,14 +244,21 @@ public sealed class CyberpunkConflictResolver
 
         if (conflicting.Count == 0) return;
 
-        // Smart order: patches/fixes first, then the most targeted mod (fewest files), then the newest.
+        // The game loads archives in ASCII (ordinal) order and the first one wins. Respect the author's intent first:
+        // names starting with "#", "!", "_" or a digit are meant to win and keep their order; names starting with
+        // "zz" are meant to lose. Only the remaining conflicting archives get the smart order: patches/fixes first,
+        // then the most targeted mod (fewest files), then the newest.
         int Rank(int i) => PatchWords.Any(w => archives[i].Name.Contains(w, StringComparison.OrdinalIgnoreCase)) ? 0 : 1;
-        var winnersFirst = conflicting
+        var authorFirst = conflicting.Where(i => AuthorWantsFirst(archives[i].Name))
+            .OrderBy(i => archives[i].Name, StringComparer.Ordinal);
+        var authorLast = conflicting.Where(i => AuthorWantsLast(archives[i].Name))
+            .OrderBy(i => archives[i].Name, StringComparer.Ordinal);
+        var middle = conflicting.Where(i => !AuthorWantsFirst(archives[i].Name) && !AuthorWantsLast(archives[i].Name))
             .OrderBy(Rank)
             .ThenBy(i => entryCounts[i])
             .ThenByDescending(i => archives[i].LastWriteTimeUtc)
-            .ThenBy(i => archives[i].Name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+            .ThenBy(i => archives[i].Name, StringComparer.Ordinal);
+        var winnersFirst = authorFirst.Concat(middle).Concat(authorLast).ToList();
 
         var modList = Path.Combine(modDir.FullName, "modlist.txt");
         var ownerFile = Path.Combine(modDir.FullName, ModListOwnerFile);
@@ -279,9 +277,9 @@ public sealed class CyberpunkConflictResolver
             return;
         }
 
-        // Conflicting archives in winning order first, then everything else alphabetically (the game's default).
+        // Conflicting archives in winning order first, then everything else in the game's default (ASCII) order.
         var rest = Enumerable.Range(0, archives.Length).Where(i => !conflicting.Contains(i))
-            .OrderBy(i => archives[i].Name, StringComparer.OrdinalIgnoreCase);
+            .OrderBy(i => archives[i].Name, StringComparer.Ordinal);
         var lines = winnersFirst.Concat(rest).Select(i => archives[i].Name).ToArray();
         var previous = File.Exists(modList) ? File.ReadAllLines(modList) : [];
         if (previous.SequenceEqual(lines, StringComparer.Ordinal)) return;
@@ -289,6 +287,10 @@ public sealed class CyberpunkConflictResolver
         summary.ModListChanged = true;
         File.WriteAllText(ownerFile, "This modlist.txt is managed by Afterburn's conflict check. Delete this file to manage modlist.txt yourself.");
     }
+
+    private static bool AuthorWantsFirst(string name) => name.Length > 0 && !char.IsAsciiLetter(name[0]);
+
+    private static bool AuthorWantsLast(string name) => name.StartsWith("zz", StringComparison.OrdinalIgnoreCase);
 
     // ---------------------------------------------------------------- script conflicts
 
@@ -328,7 +330,8 @@ public sealed class CyberpunkConflictResolver
 /// <summary>What the conflict check found and did.</summary>
 public sealed class ConflictSummary
 {
-    public List<string> DisabledMods { get; } = [];
+    /// <summary>Mods that failed on the last launch (reported only; Afterburn doesn't turn them off).</summary>
+    public List<string> BrokenMods { get; } = [];
     public List<string> ArchiveConflicts { get; } = [];
     public List<string> ScriptConflicts { get; } = [];
     public List<string> Overwrites { get; } = [];
@@ -336,15 +339,15 @@ public sealed class ConflictSummary
 
     public bool ModListChanged { get; set; }
 
-    public bool HasAnything => DisabledMods.Count > 0 || ArchiveConflicts.Count > 0 || ScriptConflicts.Count > 0 || Overwrites.Count > 0;
+    public bool HasAnything => BrokenMods.Count > 0 || ArchiveConflicts.Count > 0 || ScriptConflicts.Count > 0 || Overwrites.Count > 0;
 
     /// <summary>True when Afterburn changed something this launch, so the toast doesn't repeat every time.</summary>
-    public bool ShouldNotify => DisabledMods.Count > 0 || ModListChanged;
+    public bool ShouldNotify => BrokenMods.Count > 0 || ModListChanged;
 
     public string ToShortText()
     {
         var parts = new List<string>();
-        if (DisabledMods.Count > 0) parts.Add($"turned off {DisabledMods.Count} broken mod(s)");
+        if (BrokenMods.Count > 0) parts.Add($"{BrokenMods.Count} mod(s) failed to load last time; check them and update or turn them off");
         if (ArchiveConflicts.Count > 0) parts.Add($"ordered {ArchiveConflicts.Count} archive conflict(s)");
         if (ScriptConflicts.Count > 0) parts.Add($"found {ScriptConflicts.Count} script conflict(s)");
         if (Overwrites.Count > 0) parts.Add($"{Overwrites.Count} mod overlap(s) handled by load order");
@@ -357,7 +360,7 @@ public sealed class ConflictSummary
         var sb = new StringBuilder();
         sb.AppendLine($"Afterburn conflict check - {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         sb.AppendLine();
-        Section(sb, "Mods turned off so the game can start (turn them back on in Afterburn after updating them)", DisabledMods);
+        Section(sb, "Mods that failed on the last launch (nothing was turned off; if many are listed, an outdated framework mod such as Codeware, ArchiveXL, TweakXL or RED4ext is the usual cause)", BrokenMods);
         Section(sb, "Archive conflicts (load order set in archive/pc/mod/modlist.txt)", ArchiveConflicts);
         Section(sb, "Script conflicts (two mods replace the same game function; the game uses only one)", ScriptConflicts);
         Section(sb, "Same-file overwrites (load order picks the winner; change it on the Load Order page)", Overwrites);

@@ -7,8 +7,6 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Europe/London"
-    labels:
-      - "area-dependencies"
     allow:
       - dependency-name: "System.*"
       - dependency-name: "Microsoft.*"
@@ -17,12 +15,13 @@ updates:
       - dependency-name: "GameFinder*"
     ignore:
       # NOTE(erri120): "special" dependencies that are tied to the roslyn compiler version
-      - dependency-name: "Microsoft.CodeAnalysis.CSharp*"
-      - dependency-name: "System.CommandLine"
+      - dependency-name: "Microsoft.CodeAnalysis*"
+      # Afterburn: System.CommandLine 2.x final isn't compatible with the beta API the app uses (NamingConventionBinder).
+      - dependency-name: "System.CommandLine*"
+      # Afterburn targets .NET 9: newer major versions of the .NET libraries belong to newer runtimes.
+      - dependency-name: "Microsoft.*"
         update-types: ["version-update:semver-major"]
-      - dependency-name: "System.Linq.Async"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "System.Reactive"
+      - dependency-name: "System.*"
         update-types: ["version-update:semver-major"]
     groups:
       System:

@@ -17,16 +17,11 @@ public class ApiKeyMessageFactory(IConnection conn) : BaseHttpMessageFactory, IA
     private string? EnvironmentApiKey => ReadEnvironmentApiKey();
 
     /// <summary>
-    /// Afterburn: reads the API key from this process's environment, or on Windows from the user's saved
-    /// environment variables, so a key saved after Windows Explorer started is still found.
+    /// Afterburn: returns the personal API key. It is kept encrypted for the current Windows user; a key still set in
+    /// the NEXUS_API_KEY environment variable is imported once and hidden from programs Afterburn starts.
+    /// See <see cref="ApiKeyStore"/>.
     /// </summary>
-    public static string? ReadEnvironmentApiKey()
-    {
-        var value = Environment.GetEnvironmentVariable(NexusApiKeyEnvironmentVariable);
-        if (string.IsNullOrWhiteSpace(value) && OperatingSystem.IsWindows())
-            value = Environment.GetEnvironmentVariable(NexusApiKeyEnvironmentVariable, EnvironmentVariableTarget.User);
-        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    }
+    public static string? ReadEnvironmentApiKey() => ApiKeyStore.Read();
 
     private string ApiKey
     {

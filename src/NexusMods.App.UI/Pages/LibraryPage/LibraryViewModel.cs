@@ -1073,6 +1073,15 @@ After asking design, we're choosing to simply open the mod page for now.
             return;
         }
 
+        // Afterburn manages Cyberpunk 2077 only.
+        if (!string.Equals(link.Domain.Value, "cyberpunk2077", StringComparison.OrdinalIgnoreCase))
+        {
+            _notificationService.ShowToast(
+                "That's a collection for another game. Afterburn only manages Cyberpunk 2077 collections.",
+                ToastNotificationVariant.Failure);
+            return;
+        }
+
         if (!await _loginManager.GetIsUserLoggedInAsync(cancellationToken))
         {
             _notificationService.ShowToast(
@@ -1106,7 +1115,20 @@ After asking design, we're choosing to simply open the mod page for now.
         // download, install page and messages are exactly the same.
         var handler = _serviceProvider.GetServices<NexusMods.CLI.Types.IIpcProtocolHandler>().FirstOrDefault(h => h.Protocol == "nxm");
         if (handler is null) return;
-        _ = Task.Run(() => handler.Handle(nxmUrl, CancellationToken.None), CancellationToken.None);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await handler.Handle(nxmUrl, CancellationToken.None);
+            }
+            catch (Exception e)
+            {
+                _serviceProvider.GetService<ILogger<LibraryViewModel>>()?.LogError(e, "Failed to add the collection from a pasted link");
+                _notificationService.ShowToast(
+                    "Couldn't add that collection. Check your internet connection and try again; details are in the log.",
+                    ToastNotificationVariant.Failure);
+            }
+        }, CancellationToken.None);
     }
 }
 

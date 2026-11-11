@@ -620,21 +620,60 @@ internal partial class LoadoutManager : ILoadoutManager
         {
             // Afterburn: some collections contain load-order rules that contradict each other (A before B, B before A),
             // which used to stop the whole install. Keep every rule that doesn't create a loop and skip the rest.
+            // Each rule is checked with a quick reachability search on the rules kept so far (instead of re-sorting
+            // everything after every rule), so even large collections stay fast.
             var kept = new List<(EntityId SourceId, EntityId OtherId, int RuleType)>(allRules.Count);
+            var edges = new Dictionary<EntityId, List<EntityId>>();
             var skipped = 0;
+
+            bool Reaches(EntityId from, EntityId to)
+            {
+                if (from.Equals(to)) return true;
+                var seen = new HashSet<EntityId> { from };
+                var stack = new Stack<EntityId>();
+                stack.Push(from);
+                while (stack.Count > 0)
+                {
+                    if (!edges.TryGetValue(stack.Pop(), out var next)) continue;
+                    foreach (var n in next)
+                    {
+                        if (n.Equals(to)) return true;
+                        if (seen.Add(n)) stack.Push(n);
+                    }
+                }
+
+                return false;
+            }
+
             foreach (var rule in allRules)
             {
-                kept.Add(rule);
-                try { SortWith(kept); }
-                catch (InvalidOperationException)
+                // "first" must come before "second" for this rule.
+                var (first, second) = (CollectionDownloadRuleType)rule.RuleType == CollectionDownloadRuleType.Before
+                    ? (rule.SourceId, rule.OtherId)
+                    : (rule.OtherId, rule.SourceId);
+
+                if (Reaches(second, first))
                 {
-                    kept.RemoveAt(kept.Count - 1);
                     skipped++;
+                    continue;
                 }
+
+                if (!edges.TryGetValue(first, out var list)) edges[first] = list = new List<EntityId>();
+                list.Add(second);
+                kept.Add(rule);
             }
 
             _logger.LogWarning("Collection {CollectionId} has {Count} conflicting load-order rule(s); they were skipped", collectionId.Value, skipped);
-            sortedItems = SortWith(kept);
+            try
+            {
+                sortedItems = SortWith(kept);
+            }
+            catch (InvalidOperationException e)
+            {
+                // Still unsortable for another reason: install without the collection's load-order rules rather than failing.
+                _logger.LogWarning(e, "Collection {CollectionId}: load-order rules couldn't be applied, using the default order", collectionId.Value);
+                sortedItems = SortWith([]);
+            }
         }
 
         using var tx = _connection.BeginTransaction();

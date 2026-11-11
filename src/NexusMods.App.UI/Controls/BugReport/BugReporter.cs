@@ -26,6 +26,11 @@ public static class BugReporter
 
     private static readonly Regex EmailRegex = new(@"[\w.+-]+@[\w-]+\.[\w.-]+", RegexOptions.None, RegexTimeout);
 
+    // Afterburn: Nexus download links carry a personal, time-limited key ("?key=...&expires=...").
+    private static readonly Regex QueryKeyRegex = new(
+        @"(?i)([?&](?:key|expires|user_id|token|access_token|refresh_token|code|state)=)[^&\s""'`]+",
+        RegexOptions.None, RegexTimeout);
+
     public static async Task ReportAsync(
         IAvaloniaInterop avaloniaInterop,
         IOSInterop osInterop,
@@ -104,8 +109,10 @@ public static class BugReporter
         {
             var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             if (!string.IsNullOrEmpty(home)) text = text.Replace(home, "<home>", StringComparison.OrdinalIgnoreCase);
-            if (!string.IsNullOrEmpty(Environment.UserName)) text = text.Replace(Environment.UserName, "<user>", StringComparison.OrdinalIgnoreCase);
-            if (!string.IsNullOrEmpty(Environment.MachineName)) text = text.Replace(Environment.MachineName, "<pc>", StringComparison.OrdinalIgnoreCase);
+            // Replace the user and PC names only as whole words, so a short name doesn't mangle unrelated text.
+            text = ReplaceWord(text, Environment.UserName, "<user>");
+            text = ReplaceWord(text, Environment.MachineName, "<pc>");
+            text = QueryKeyRegex.Replace(text, "$1<removed>");
             text = SecretRegex.Replace(text, "$1$2<removed>");
             text = EmailRegex.Replace(text, "<email>");
             return text;
@@ -114,5 +121,12 @@ public static class BugReporter
         {
             return "(line removed: could not be cleaned safely)";
         }
+    }
+
+    private static string ReplaceWord(string text, string? word, string replacement)
+    {
+        if (string.IsNullOrWhiteSpace(word) || word.Length < 2) return text;
+        return Regex.Replace(text, @"(?<![\p{L}\p{N}])" + Regex.Escape(word) + @"(?![\p{L}\p{N}])", replacement,
+            RegexOptions.IgnoreCase, RegexTimeout);
     }
 }

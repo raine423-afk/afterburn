@@ -6,6 +6,10 @@ Afterburn includes the following third-party components. Release builds also inc
 - Included in self-contained builds and the installer (the `System.*` and `Microsoft.*` runtime files, `coreclr.dll`, `hostfxr.dll` and related files).
 - Copyright (c) .NET Foundation and Contributors. License: MIT (text below). Microsoft's own third-party notices for the runtime: https://github.com/dotnet/runtime/blob/main/THIRD-PARTY-NOTICES.TXT
 
+## 7-Zip
+- Files: `src/NexusMods.Backend/runtimes/win-x64/native/7z.exe` and `7z.dll` (version 26.06, from https://www.7-zip.org/), used to unpack mod archives. The Linux and macOS `7zz` binaries in `runtimes/` are 7-Zip 21.03 and are not part of the Windows build.
+- Copyright (C) 1999-2026 Igor Pavlov. License: GNU LGPL 2.1 or later, with parts under the BSD 3-clause and BSD 2-clause licenses, and the unRAR license restriction for the RAR decompression code (the code may not be used to re-create the RAR compression algorithm). Full license and source code: https://www.7-zip.org/license.txt and https://www.7-zip.org/download.html
+
 ## Inno Setup
 - Used to build the Windows installer; the installer contains Inno Setup's setup program.
 - Copyright (C) 1997-2026 Jordan Russell, Portions Copyright (C) 2000-2026 Martijn Laan. Inno Setup license: https://jrsoftware.org/files/is/license.txt

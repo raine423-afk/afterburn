@@ -36,7 +36,7 @@ Free Nexus Mods accounts must click each mod's download on the website. This is 
 Afterburn is in **testing**. Under the Nexus Mods [API Acceptable Use Policy](https://help.nexusmods.com/article/114-api-acceptable-use-policy), apps for the public must be registered with Nexus Mods before they use the API. **Afterburn's registration is pending.** Until it's approved:
 
 - The built-in "Log in with Nexus Mods" button won't work.
-- For **testing or personal use only**, log in with your own personal API key. Get it from your Nexus Mods account's API Access page, then set it as the `NEXUS_API_KEY` environment variable before starting Afterburn.
+- For **testing or personal use only**, log in with your own personal API key. Get it from your Nexus Mods account's API Access page, then set it as the `NEXUS_API_KEY` environment variable before starting Afterburn. Afterburn copies the key into an encrypted file that only your Windows account can read (`%LOCALAPPDATA%\AfterburnData`), hides it from the game and other programs it starts, and you can then delete the environment variable.
 
 ## Building
 

@@ -109,9 +109,11 @@ public class FomodXmlInstaller : ALibraryArchiveInstaller
         // took over the first one's window and the first dialog's Next button stopped doing anything. Each run now
         // gets its own delegates and window, and FOMOD dialogs are shown one at a time.
         var delegates = _delegates;
+        // A scope per run, so the installer window objects created for this run are released when it ends.
+        using var runScope = new SafeScope(ServiceProvider.CreateScope(), _logger);
         if (_delegates is InstallerDelegates)
         {
-            var runDelegates = (InstallerDelegates)ServiceProvider.GetRequiredService<ICoreDelegates>();
+            var runDelegates = (InstallerDelegates)runScope.Scope.ServiceProvider.GetRequiredService<ICoreDelegates>();
             if (options is not null)
             {
                 // NOTE(halgari) The support for passing in presets to the installer is utterly broken. So we're going to
@@ -131,7 +133,7 @@ public class FomodXmlInstaller : ALibraryArchiveInstaller
         var installScript = _scriptType.LoadScript(rawScript, true);
         FixScript(installScript, fomodArchiveFiles, _logger);
 
-        var instructions = await OneAtATime(() => executor.Execute(installScript, "", null), cancellationToken);
+        var instructions = await OneAtATime(() => executor.Execute(installScript, "", null), libraryArchive.AsLibraryFile().FileName.ToString(), cancellationToken);
 
         var errors = instructions.Where(instruction => instruction.type == "error").ToArray();
         if (errors.Length != 0) throw new Exception(string.Join("; ", errors.Select(err => err.source)));
@@ -143,9 +145,36 @@ public class FomodXmlInstaller : ALibraryArchiveInstaller
         return new Success();
     }
 
-    private static async Task<T> OneAtATime<T>(Func<Task<T>> run, CancellationToken cancellationToken)
+    /// <summary>Disposes a DI scope without letting a clean-up error fail the install.</summary>
+    private sealed class SafeScope(IServiceScope scope, ILogger logger) : IDisposable
     {
-        await FomodDialogGate.WaitAsync(cancellationToken);
+        public IServiceScope Scope { get; } = scope;
+
+        public void Dispose()
+        {
+            try { Scope.Dispose(); }
+            catch (Exception e) { logger.LogDebug(e, "Ignoring an error while releasing the FOMOD installer window"); }
+        }
+    }
+
+    private async Task<T> OneAtATime<T>(Func<Task<T>> run, string modName, CancellationToken cancellationToken)
+    {
+        if (!await FomodDialogGate.WaitAsync(TimeSpan.Zero, cancellationToken))
+        {
+            _logger.LogInformation("`{Mod}` has install options too; it will open after the installer window that is already open is finished", modName);
+            try
+            {
+                ServiceProvider.GetService<NexusMods.UI.Sdk.IWindowNotificationService>()?.ShowToast(
+                    $"{modName} has install options too. Its window opens after you finish the one that's already open.",
+                    expiration: TimeSpan.FromSeconds(10));
+            }
+            catch (Exception e)
+            {
+                _logger.LogDebug(e, "Couldn't show the waiting notice");
+            }
+            await FomodDialogGate.WaitAsync(cancellationToken);
+        }
+
         try
         {
             return await run();

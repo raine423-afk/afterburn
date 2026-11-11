@@ -94,10 +94,11 @@ public class SevenZipExtractor : IExtractor
             string fileNameOnDisk;
             if (isWindows)
             {
-                if (fileName.Length > maxBufferSize) throw new NotSupportedException($"File name is too long: `{fileName}`");
-                fileName.AsSpan().CopyTo(span);
-
-                var slice = span.SliceFast(start: 0, length: fileName.Length);
+                // Afterburn: very long names used to fail the whole install; use a heap buffer for those instead.
+                var slice = fileName.Length <= maxBufferSize
+                    ? span.SliceFast(start: 0, length: fileName.Length)
+                    : new char[fileName.Length].AsSpan();
+                fileName.AsSpan().CopyTo(slice);
                 To7ZipWindowsExtractionPath(slice);
 
                 fileNameOnDisk = slice.ToString();

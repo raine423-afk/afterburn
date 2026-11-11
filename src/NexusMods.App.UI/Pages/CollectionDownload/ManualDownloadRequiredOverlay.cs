@@ -78,7 +78,11 @@ public class ManualDownloadRequiredOverlayViewModel : AOverlayViewModel<IManualD
         var revisionBugsUri = NexusModsUrlBuilder.GetCollectionBugsUri(gameDomain, revision.Collection.Slug, revision.RevisionNumber, campaign: NexusModsUrlBuilder.CampaignCollections);
 
         CommandCancel = new ReactiveCommand(_ => { base.Close(); });
-        CommandOpenBrowser = new ReactiveCommand(execute: _ => osInterop.OpenUri(downloadEntity.Uri));
+        // Afterburn: the address comes from the collection author; only open web pages.
+        CommandOpenBrowser = new ReactiveCommand(execute: _ =>
+        {
+            if (UntrustedLinks.IsWebLink(downloadEntity.Uri)) osInterop.OpenUri(downloadEntity.Uri);
+        });
 
         CommandAddFile = new ReactiveCommand(
             executeAsync: async (_, _) =>
