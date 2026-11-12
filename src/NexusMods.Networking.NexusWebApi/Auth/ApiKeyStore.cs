@@ -199,7 +199,12 @@ public static class ApiKeyStore
                 Marshal.FreeHGlobal(input.Data);
             }
             if (entropy.Data != IntPtr.Zero) Marshal.FreeHGlobal(entropy.Data);
-            if (output.Data != IntPtr.Zero) LocalFree(output.Data);
+            if (output.Data != IntPtr.Zero)
+            {
+                // Don't leave the decrypted key lying around in memory Windows allocated for us.
+                Marshal.Copy(new byte[output.Size], 0, output.Data, output.Size);
+                LocalFree(output.Data);
+            }
         }
     }
 }

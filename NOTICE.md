@@ -74,3 +74,4 @@ All changes made 2026-11-09 unless noted.
 - **Apply fix:** the safe-extraction step no longer fails when a mod file goes into a folder that does not exist yet (`ALoadoutSynchronizer.cs`).
 - **Turn off animations:** new option in Settings > General that removes interface transitions (`BehaviorSettings.cs`, `App.axaml.cs`).
 - **Saved paths after folder move:** settings files that mention the old data folder are updated to the new one (`Program.cs`).
+- **API key memory:** the memory block holding the decrypted key is wiped before it is released (`ApiKeyStore.cs`).
