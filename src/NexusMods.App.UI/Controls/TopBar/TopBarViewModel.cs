@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NexusMods.Abstractions.NexusWebApi;
 using NexusMods.Abstractions.NexusWebApi.Types;
+using NexusMods.Networking.NexusWebApi.Auth;
 using NexusMods.Sdk.Settings;
 using NexusMods.Abstractions.NexusLinks;
 using NexusMods.App.UI.Controls.BugReport;
@@ -34,6 +35,7 @@ namespace NexusMods.App.UI.Controls.TopBar;
 public class TopBarViewModel : AViewModel<ITopBarViewModel>, ITopBarViewModel
 {
     private readonly ILoginManager _loginManager;
+    private readonly IAvaloniaInterop _avaloniaInterop;
     private readonly ILogger<TopBarViewModel> _logger;
     private readonly IWindowNotificationService _notificationService;
 
@@ -79,6 +81,7 @@ public class TopBarViewModel : AViewModel<ITopBarViewModel>, ITopBarViewModel
     {
         _logger = logger;
         _loginManager = loginManager;
+        _avaloniaInterop = avaloniaInterop;
         _notificationService = notificationService;
 
         var workspaceController = windowManager.ActiveWorkspaceController;
@@ -223,12 +226,14 @@ public class TopBarViewModel : AViewModel<ITopBarViewModel>, ITopBarViewModel
 
     private async Task Login()
     {
-        _logger.LogInformation("Logging into Nexus Mods");
-        await _loginManager.LoginAsync();
-        
-        if (await _loginManager.GetIsUserLoggedInAsync())
-            _notificationService.ShowToast(Language.ToastNotification_Signed_in_successfully, ToastNotificationVariant.Success);
-            
+        // Afterburn: until Nexus Mods approves Afterburn, the Nexus Mods login (OAuth) is not used. Logging in works
+        // with the user's personal API key: they copy it on nexusmods.com and click the button; it is read from the
+        // clipboard, checked with Nexus Mods and saved encrypted. It takes effect when Afterburn is next started.
+        _logger.LogInformation("Logging in with a personal API key from the clipboard");
+        var text = await _avaloniaInterop.GetClipboardTextAsync();
+        var (success, message) = await ApiKeyStore.ValidateAndSaveAsync(text);
+        _logger.LogInformation("Personal API key login: {Success}", success);
+        _notificationService.ShowToast(message, success ? ToastNotificationVariant.Success : ToastNotificationVariant.Neutral, TimeSpan.FromSeconds(12));
     }
 
     private async Task Logout()

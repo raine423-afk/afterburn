@@ -10,9 +10,9 @@
     </LinearGradientBrush>
     
     <LinearGradientBrush x:Key="AppLinearGradientBrush" StartPoint="0%,50%" EndPoint="100%,50%">
-        <!-- Afterburn: neon cyan to magenta -->
-        <GradientStop Color="#22D8EE" Offset="0" />
-        <GradientStop Color="#E879F9" Offset="1" />
+        <!-- Afterburn: emerald green -->
+        <GradientStop Color="#34D399" Offset="0" />
+        <GradientStop Color="#10B981" Offset="1" />
     </LinearGradientBrush>
     
     <LinearGradientBrush x:Key="PremiumButtonLinearGradientBrush" StartPoint="0%,50%" EndPoint="100%,50%">

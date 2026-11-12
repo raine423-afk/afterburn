@@ -61,6 +61,50 @@ public static class ApiKeyStore
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    /// <summary>
+    /// Checks a personal API key with Nexus Mods and, if it is accepted, saves it (encrypted for this Windows user).
+    /// Returns whether it worked and a message for the user. The key only takes effect the next time Afterburn starts.
+    /// </summary>
+    public static async Task<(bool Success, string Message)> ValidateAndSaveAsync(string? candidate, CancellationToken cancellationToken = default)
+    {
+        var key = Clean(candidate);
+        if (key is null || key.Length < 20 || key.Length > 400 || !key.All(static c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '=' or '+' or '/' or '.'))
+            return (false, "Copy your Personal API Key from nexusmods.com/users/myaccount?tab=api first, then click this button again.");
+
+        if (!OperatingSystem.IsWindows())
+            return (false, "Saving an API key is only supported on Windows.");
+
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            using var request = new HttpRequestMessage(HttpMethod.Get, ClientConfig.LegacyApiEndpoint + "/users/validate.json");
+            request.Headers.Add("apikey", key);
+            request.Headers.Add(BaseHttpMessageFactory.HeaderApplicationName, NexusMods.Sdk.ApplicationConstants.UserAgent.ApplicationName);
+            request.Headers.Add(BaseHttpMessageFactory.HeaderApplicationVersion, NexusMods.Sdk.ApplicationConstants.UserAgent.ApplicationVersion);
+            using var response = await http.SendAsync(request, cancellationToken);
+
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+                return (false, "Nexus Mods didn't accept that key. Copy it again from your API page and try again.");
+            if (!response.IsSuccessStatusCode)
+                return (false, $"Nexus Mods couldn't check the key right now (error {(int)response.StatusCode}). Try again in a few minutes.");
+        }
+        catch (Exception)
+        {
+            return (false, "Couldn't reach Nexus Mods to check the key. Check your internet connection and try again.");
+        }
+
+        if (!TryWriteFile(key))
+            return (false, "The key is valid, but Afterburn couldn't save it. Check that your Windows user can write to %LOCALAPPDATA%\\AfterburnData.");
+
+        lock (Gate)
+        {
+            _loaded = true;
+            _cached = key;
+        }
+
+        return (true, "API key saved. Close Afterburn completely (check the tray icon too) and open it again to finish logging in.");
+    }
+
     private static string? TryReadFile()
     {
         try
@@ -75,20 +119,22 @@ public static class ApiKeyStore
         }
     }
 
-    private static void TryWriteFile(string key)
+    private static bool TryWriteFile(string key)
     {
         try
         {
             var encrypted = Protect(Encoding.UTF8.GetBytes(key));
-            if (encrypted is null) return;
+            if (encrypted is null) return false;
             Directory.CreateDirectory(StorageFolder);
             var tmp = KeyFilePath + ".tmp";
             File.WriteAllBytes(tmp, encrypted);
             File.Move(tmp, KeyFilePath, overwrite: true);
+            return true;
         }
         catch
         {
             // Not fatal: the key is still used for this session.
+            return false;
         }
     }
 

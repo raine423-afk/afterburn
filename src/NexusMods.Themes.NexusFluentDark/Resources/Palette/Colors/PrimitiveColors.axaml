@@ -149,7 +149,7 @@
     <Color x:Key="PrimitivePureBlack">#000000</Color>
 
 
-    <!-- Afterburn palette: teal and neon-blue "Midnight" neutrals and neon "Cyan" primary -->
+    <!-- Afterburn palette: teal and neon-blue "Midnight" neutrals and emerald-green "Cyan" primary (the key names still say Cyan; the values are emerald) -->
     <Color x:Key="PrimitiveMidnight950">#031418</Color>
     <Color x:Key="PrimitiveMidnight900">#052229</Color>
     <Color x:Key="PrimitiveMidnight800">#073540</Color>
@@ -161,15 +161,15 @@
     <Color x:Key="PrimitiveMidnight200">#CDE4EA</Color>
     <Color x:Key="PrimitiveMidnight100">#E4F2F5</Color>
     <Color x:Key="PrimitiveMidnight50">#F3FAFC</Color>
-    <Color x:Key="PrimitiveCyan950">#032F36</Color>
-    <Color x:Key="PrimitiveCyan900">#0B4A57</Color>
-    <Color x:Key="PrimitiveCyan800">#0C5E6E</Color>
-    <Color x:Key="PrimitiveCyan700">#0B7688</Color>
-    <Color x:Key="PrimitiveCyan600">#0894AA</Color>
-    <Color x:Key="PrimitiveCyan500">#06B8D0</Color>
-    <Color x:Key="PrimitiveCyan400">#22D8EE</Color>
-    <Color x:Key="PrimitiveCyan300">#67E9F9</Color>
-    <Color x:Key="PrimitiveCyan200">#A5F3FC</Color>
-    <Color x:Key="PrimitiveCyan100">#CFFAFE</Color>
-    <Color x:Key="PrimitiveCyan50">#ECFEFF</Color>
+    <Color x:Key="PrimitiveCyan950">#022C22</Color>
+    <Color x:Key="PrimitiveCyan900">#064E3B</Color>
+    <Color x:Key="PrimitiveCyan800">#065F46</Color>
+    <Color x:Key="PrimitiveCyan700">#047857</Color>
+    <Color x:Key="PrimitiveCyan600">#059669</Color>
+    <Color x:Key="PrimitiveCyan500">#10B981</Color>
+    <Color x:Key="PrimitiveCyan400">#34D399</Color>
+    <Color x:Key="PrimitiveCyan300">#6EE7B7</Color>
+    <Color x:Key="PrimitiveCyan200">#A7F3D0</Color>
+    <Color x:Key="PrimitiveCyan100">#D1FAE5</Color>
+    <Color x:Key="PrimitiveCyan50">#ECFDF5</Color>
 </ResourceDictionary>

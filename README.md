@@ -21,6 +21,25 @@
 
 See [NOTICE.md](NOTICE.md) for the full list of changes.
 
+## Quick start (testing and personal use, until Nexus Mods approves Afterburn)
+
+Afterburn's registration with Nexus Mods is still pending, so the normal **Log in with Nexus Mods** button doesn't work yet. (Afterburn doesn't borrow the official Nexus Mods app's login credentials, so the button stays inactive until Afterburn has its own.) Until then, use your own personal API key through the **Log in with API key** button. Nexus Mods' [API Acceptable Use Policy](https://help.nexusmods.com/article/114-api-acceptable-use-policy) allows personal keys for **testing and personal use only**, so please don't build other tools or services on this, and don't share your key. It takes about two minutes:
+
+1. **Install Afterburn.** Download `Afterburn-Setup-<version>.exe` from the [Releases page](https://github.com/raine423-afk/afterburn/releases) and run it. If Windows shows "Windows protected your PC", choose **More info → Run anyway** (the installer isn't code-signed yet).
+2. **Get your personal API key.** Log in at nexusmods.com, open [your account's API page](https://www.nexusmods.com/users/myaccount?tab=api) and copy the **Personal API Key**. Keep it private: it is like a password for your account, so never post it in an Issue or send it to anyone.
+3. **Click the green "Log in with API key" button** at the top right of Afterburn. It reads the key you just copied, checks it with Nexus Mods and saves it, encrypted so only your Windows account can read it. You'll see a message when it's done.
+4. **Close Afterburn completely** (check the tray icon too) and open it again. You're now logged in; there is nothing else to enter.
+5. **Add Cyberpunk 2077 and install a collection.** See the next section.
+
+**Once Nexus Mods approves Afterburn**, you won't need a key: the button becomes a normal **Log in** button, your browser opens on nexusmods.com, you approve Afterburn there, and you're returned to the app. You can revoke Afterburn's access at any time on your Nexus Mods API page.
+
+Good to know:
+
+- Afterburn only touches Cyberpunk 2077. Close the game before you click **Apply**.
+- If the game won't start after applying, open `r6/logs/afterburn-conflicts.txt` in your game folder, or the **Conflicts** tab of your mod list. It lists broken mods, conflicts and damaged archives, and says what to do.
+- Free Nexus Mods accounts must click each mod's download on the website (a Nexus Mods rule). Premium accounts download everything automatically.
+- Please report problems on this repository's Issues page, not to Nexus Mods.
+
 ## Adding a Cyberpunk 2077 collection
 
 1. Log in to Nexus Mods in Afterburn (top-right button).

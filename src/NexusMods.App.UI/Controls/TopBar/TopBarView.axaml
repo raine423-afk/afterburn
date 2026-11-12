@@ -184,11 +184,11 @@
 
                     <!-- login button -->
                     <controls:StandardButton x:Name="LoginButton"
-                                             Text="{x:Static resources:Language.TopBarActions__LOG_IN}"
+                                             Text="Log in with API key"
                                              Type="Primary"
                                              Fill="Strong"
                                              Size="Small"
-                                             ToolTip.Tip="{x:Static resources:Language.TopBarActions__LOG_IN_ToolTip}" />
+                                             ToolTip.Tip="Until Nexus Mods approves Afterburn: copy your Personal API Key from nexusmods.com/users/myaccount?tab=api, then click here." />
 
                     <!-- avatar button -->
                     <controls:StandardButton x:Name="AvatarMenuItemButton"

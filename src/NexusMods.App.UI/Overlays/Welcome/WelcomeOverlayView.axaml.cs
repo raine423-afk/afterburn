@@ -33,7 +33,8 @@ public partial class WelcomeOverlayView : ReactiveUserControl<IWelcomeOverlayVie
             this.WhenAnyValue(view => view.ViewModel!.IsLoggedIn.Value)
                 .Subscribe(isLoggedIn =>
                 {
-                    ButtonLogIn.IsVisible = !isLoggedIn;
+                    // Afterburn: Nexus Mods login is unavailable until Afterburn is approved; use the API key button in the top bar.
+                    ButtonLogIn.IsVisible = false;
                     ButtonLogOut.IsVisible = isLoggedIn;
                     ButtonClose.Text = isLoggedIn ? "Close" : "Guest";
                 })
