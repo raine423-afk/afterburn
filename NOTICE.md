@@ -71,3 +71,4 @@ All changes made 2026-11-09 unless noted.
 - **Security update:** OpenTelemetry packages updated from 1.12.0 to 1.15.3 to fix GHSA-4625-4j76-fww9 (`Directory.Packages.props`). Telemetry stays disabled.
 - **Afterburn data folders:** settings, logs, temp files, the file-hash database and Steam login now live in `%LOCALAPPDATA%\Afterburn` instead of `NexusMods.App`; an existing `NexusMods.App` folder is renamed on first start (`Program.cs`, `LoggingSettings.cs`, `JsonStorageBackend.cs`, `DataModelSettings.cs`, `CliSettings.cs`, `FileHashesServiceSettings.cs`, `IFileExtractorSettings.cs`, `AppDirectoryAuthStorage.cs`).
 - **Installer:** the install-location page is always shown so Afterburn can be installed to any drive (`installer/afterburn.iss`).
+- **Apply fix:** the safe-extraction step no longer fails when a mod file goes into a folder that does not exist yet (`ALoadoutSynchronizer.cs`).

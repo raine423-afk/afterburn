@@ -819,7 +819,8 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
             foreach (var (hash, finalPath) in toExtract)
             {
                 var tempPath = finalPath.AppendExtension(tempExtension);
-                System.IO.File.Delete(tempPath.GetFullPath()); // leftover from an earlier cut-off apply; no error if missing
+                // Leftover from an earlier cut-off apply. File.Delete throws if the folder doesn't exist yet, so check first.
+                if (System.IO.File.Exists(tempPath.GetFullPath())) System.IO.File.Delete(tempPath.GetFullPath());
                 toExtractTemp.Add((hash, tempPath));
             }
 
