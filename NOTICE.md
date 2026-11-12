@@ -72,3 +72,4 @@ All changes made 2026-11-09 unless noted.
 - **Afterburn data folders:** settings, logs, temp files, the file-hash database and Steam login now live in `%LOCALAPPDATA%\Afterburn` instead of `NexusMods.App`; an existing `NexusMods.App` folder is renamed on first start (`Program.cs`, `LoggingSettings.cs`, `JsonStorageBackend.cs`, `DataModelSettings.cs`, `CliSettings.cs`, `FileHashesServiceSettings.cs`, `IFileExtractorSettings.cs`, `AppDirectoryAuthStorage.cs`).
 - **Installer:** the install-location page is always shown so Afterburn can be installed to any drive (`installer/afterburn.iss`).
 - **Apply fix:** the safe-extraction step no longer fails when a mod file goes into a folder that does not exist yet (`ALoadoutSynchronizer.cs`).
+- **Turn off animations:** new option in Settings > General that removes interface transitions (`BehaviorSettings.cs`, `App.axaml.cs`).
