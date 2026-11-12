@@ -73,6 +73,7 @@ public class Program
             var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             var oldDir = System.IO.Path.Combine(root, "NexusMods.App");
             var newDir = System.IO.Path.Combine(root, "Afterburn");
+            try { var lf = System.IO.Path.Combine(newDir, "Configs", "NexusMods.CrossPlatform.LoggingSettings.json"); if (System.IO.File.Exists(lf)) { var lt = System.IO.File.ReadAllText(lf); var ln = lt.Replace("NexusMods.App/Logs", "Afterburn/Logs"); if (ln != lt) System.IO.File.WriteAllText(lf, ln); } } catch { /* not critical */ }
             if (System.IO.Directory.Exists(oldDir) && !System.IO.Directory.Exists(newDir))
             {
                 System.IO.Directory.Move(oldDir, newDir);
