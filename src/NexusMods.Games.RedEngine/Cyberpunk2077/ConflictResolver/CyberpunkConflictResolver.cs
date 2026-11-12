@@ -313,6 +313,15 @@ public sealed class CyberpunkConflictResolver : IConflictReportProvider
         var entryCounts = scan.EntryCounts;
         var pairCounts = scan.PairCounts;
 
+        // Afterburn: an archive with no readable resource list is damaged or was only partly written. The game
+        // crashes on start when it loads one, so say so (the check used to skip such files without a word).
+        var damaged = Enumerable.Range(0, archives.Length).Where(i => entryCounts[i] == 0).Select(i => archives[i].Name).ToArray();
+        if (damaged.Length > 0)
+        {
+            summary.Notes.Add($"{damaged.Length} archive(s) in archive/pc/mod look damaged or incomplete and can crash the game on start. Delete them and run Apply again, or reinstall the mod: {string.Join(", ", damaged.Take(10))}{(damaged.Length > 10 ? ", ..." : "")}");
+            _logger.LogWarning("Conflict check: {Count} archive(s) look damaged or incomplete: {Names}", damaged.Length, string.Join(", ", damaged.Take(10)));
+        }
+
         if (conflicting.Count == 0) return;
 
         // The game loads archives in ASCII (ordinal) order and the first one wins. Respect the author's intent first:

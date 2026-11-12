@@ -38,7 +38,9 @@ internal static class ArchiveIndexReader
             stream.ReadExactly(indexHeader);
             var entryCount = BitConverter.ToUInt32(indexHeader.Slice(16, 4));
 
-            if (entryCount > 5_000_000) return null;
+            // Afterburn: a real archive always lists at least one resource. An index that is all zeros means the file
+            // was only partly written (for example an apply that was cut off), which crashes the game on start.
+            if (entryCount == 0 || entryCount > 5_000_000) return null;
             var tableSize = (long)entryCount * FileEntrySize;
             if (stream.Position + tableSize > stream.Length) return null;
 

@@ -375,6 +375,8 @@ public class Program
             OverflowAction = NLog.Targets.Wrappers.AsyncTargetWrapperOverflowAction.Block,
         };
         config.AddRuleForAllLevels(asyncFileTarget);
+        // Afterburn: the log is written from a background thread, so write out what is queued if the app crashes.
+        AppDomain.CurrentDomain.UnhandledException += static (_, _) => NLog.LogManager.Flush(TimeSpan.FromSeconds(2));
         config.AddRuleForAllLevels(observableLoggingTarget);
 
 

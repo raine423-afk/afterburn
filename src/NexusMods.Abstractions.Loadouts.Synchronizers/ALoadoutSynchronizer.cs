@@ -810,7 +810,34 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         
         if (toExtract.Count > 0)
         {
-            await _fileStore.ExtractFiles(toExtract, CancellationToken.None, UpdateStatus);
+            // Afterburn: extract to a temporary name and rename each file when it is complete. Extracting straight to
+            // the final name makes the file appear at full size straight away (with an empty body), so an apply that is
+            // cut off (the app closed, a crash, power loss) leaves a half-written file that looks valid, and a
+            // half-written .archive crashes Cyberpunk 2077 on start. A cut-off apply now leaves the old file untouched.
+            var tempExtension = new Extension(".afterburn-tmp");
+            var toExtractTemp = new List<(Hash Hash, AbsolutePath Dest)>(toExtract.Count);
+            foreach (var (hash, finalPath) in toExtract)
+            {
+                var tempPath = finalPath.AppendExtension(tempExtension);
+                System.IO.File.Delete(tempPath.GetFullPath()); // leftover from an earlier cut-off apply; no error if missing
+                toExtractTemp.Add((hash, tempPath));
+            }
+
+            try
+            {
+                await _fileStore.ExtractFiles(toExtractTemp, CancellationToken.None, UpdateStatus);
+                for (var i = 0; i < toExtract.Count; i++)
+                    System.IO.File.Move(toExtractTemp[i].Dest.GetFullPath(), toExtract[i].Path.GetFullPath(), overwrite: true);
+            }
+            catch
+            {
+                foreach (var (_, tempPath) in toExtractTemp)
+                {
+                    try { System.IO.File.Delete(tempPath.GetFullPath()); }
+                    catch { /* best effort */ }
+                }
+                throw;
+            }
 
             var isUnix = _os.IsUnix();
             foreach (var (gamePath, node) in groupings)
