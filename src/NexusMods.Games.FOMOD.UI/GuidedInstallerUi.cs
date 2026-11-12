@@ -62,10 +62,11 @@ public sealed class GuidedInstallerUi : IGuidedInstaller
 
         state._window.Show();
 
+        var closedWindow = state._window!;
         Observable
             .FromEventPattern(
-                addHandler => state._window.Closed += addHandler,
-                removeHandler => state._window.Closed -= removeHandler
+                addHandler => closedWindow.Closed += addHandler,
+                removeHandler => closedWindow.Closed -= removeHandler
             )
             .SubscribeWithErrorLogging(eventPattern =>
             {
