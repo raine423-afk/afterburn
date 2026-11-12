@@ -48,6 +48,7 @@ public class FileExtractor : IFileExtractor
     /// <param name="token">Used for cancellation of the operation.</param>
     public async Task ExtractAllAsync(AbsolutePath path, AbsolutePath dest, CancellationToken token = default)
     {
+        CheckFreeSpace(path, dest);
         await ExtractAllAsync(new NativeFileStreamFactory(path), dest, token);
     }
 
@@ -76,6 +77,7 @@ public class FileExtractor : IFileExtractor
             catch (Exception ex)
             {
                 _logger.LogError(ex, "While extracting via {Extractor}", extractor);
+                if (IsDiskFull(ex)) throw new FileExtractionException($"Not enough free disk space to unpack {sFn.FileName}. Free up space on the drive that holds the temp folder and try again.");
             }
         }
 
@@ -100,6 +102,30 @@ public class FileExtractor : IFileExtractor
         return await SignatureChecker.MatchesAnyAsync(stream);
     }
 
+    private static bool IsDiskFull(Exception ex)
+    {
+        for (var e = ex; e != null; e = e.InnerException)
+        {
+            if (e is IOException io && ((io.HResult & 0xFFFF) == 0x70 || (io.HResult & 0xFFFF) == 0x27)) return true;
+        }
+        return false;
+    }
+
+    // Stops early, with a clear message, when the drive is almost full, instead of failing halfway through unpacking.
+    private static void CheckFreeSpace(AbsolutePath source, AbsolutePath dest)
+    {
+        try
+        {
+            var size = new System.IO.FileInfo(source.GetFullPath()).Length;
+            var root = System.IO.Path.GetPathRoot(dest.GetFullPath());
+            if (string.IsNullOrEmpty(root)) return;
+            var free = new System.IO.DriveInfo(root).AvailableFreeSpace;
+            if (free < size * 2)
+                throw new FileExtractionException($"Only {free / 1048576} MB free on {root}, which is too little to unpack {System.IO.Path.GetFileName(source.GetFullPath())} ({size / 1048576} MB download). Free up space and try again.");
+        }
+        catch (FileExtractionException) { throw; }
+        catch { /* can't tell, carry on */ }
+    }
     private async ValueTask<IExtractor[]> FindExtractors(IStreamFactory sFn)
     {
         await using var archive = await sFn.GetStreamAsync();
