@@ -45,6 +45,7 @@ public partial class LoadoutView : R3UserControl<ILoadoutViewModel>
                         if (vm is not null && vm.HasRulesSection && ReferenceEquals(view.RulesTabControl.SelectedItem, view.RulesTabItem))
                             view.SortingSelectionView.ViewModel = vm.RulesSectionViewModel;
                         view.RulesTabItem.IsVisible = vm?.HasRulesSection ?? false;
+                        view.ConflictsTabItem.IsVisible = vm?.HasConflictReport ?? false;
 
                         var isCollection = vm?.IsCollection ?? true;
                         var enableCollectionSharing = vm?.EnableCollectionSharing ?? false;
@@ -137,6 +138,38 @@ public partial class LoadoutView : R3UserControl<ILoadoutViewModel>
                     .AddTo(disposables);
 
                 this.BindCommand(ViewModel, vm => vm.CommandDeselectItems, view => view.DeselectItemsButton)
+                    .AddTo(disposables);
+
+                // Afterburn: Conflicts tab.
+                this.BindCommand(ViewModel, vm => vm.CommandCheckConflicts, view => view.ButtonCheckConflicts)
+                    .AddTo(disposables);
+
+                this.OneWayR3Bind(static view => view.BindableViewModel,
+                        static vm => vm.LatestConflictReport,
+                        static (view, report) =>
+                        {
+                            if (report is null)
+                            {
+                                view.ConflictsSummaryText.Text = "No conflict check has run yet. Afterburn checks automatically each time you start the game, or press Check now.";
+                                view.ConflictSections.ItemsSource = null;
+                                view.ConflictsCountBorder.IsVisible = false;
+                                return;
+                            }
+
+                            view.ConflictsSummaryText.Text = $"Last checked {report.CheckedAt.ToLocalTime():g}. {report.Summary}";
+                            view.ConflictSections.ItemsSource = report.Sections;
+
+                            var issues = report.Sections.Where(static s => s.Title != "Notes").Sum(static s => s.Items.Count);
+                            view.ConflictsCount.Text = issues.ToString();
+                            view.ConflictsCountBorder.IsVisible = issues > 0;
+                        }
+                    )
+                    .AddTo(disposables);
+
+                this.OneWayR3Bind(static view => view.BindableViewModel,
+                        static vm => vm.IsCheckingConflicts,
+                        static (view, isChecking) => view.ButtonCheckConflicts.Content = isChecking ? "Checking..." : "Check now"
+                    )
                     .AddTo(disposables);
 
                 this.BindCommand(ViewModel, vm => vm.CommandShareCollection, view => view.ButtonShareCollection)

@@ -160,7 +160,7 @@ public sealed class LibraryService : ILibraryService
         return await AddLibraryFileJob.Create(_serviceProvider, transaction, filePath: source);
     }
 
-    public async Task RemoveLibraryItems(IEnumerable<LibraryItem.ReadOnly> libraryItems, GarbageCollectorRunMode gcRunMode = GarbageCollectorRunMode.RunAsynchronously)
+    public async Task RemoveLibraryItems(IEnumerable<LibraryItem.ReadOnly> libraryItems, GarbageCollectorRunMode gcRunMode = GarbageCollectorRunMode.RunAsyncInBackground)
     {
         var items = libraryItems.ToArray();
         var groupIds = items.SelectMany(LoadoutsWithLibraryItem).Select(tuple => tuple.linkedItem.AsLoadoutItemGroup().LoadoutItemGroupId).ToArray();

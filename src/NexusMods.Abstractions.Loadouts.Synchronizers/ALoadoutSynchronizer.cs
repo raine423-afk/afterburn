@@ -49,7 +49,6 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     private readonly IOSInformation _os;
     private readonly ISorter _sorter;
     private readonly IGarbageCollectorRunner _garbageCollectorRunner;
-    private static long _lastArchiveCleanupTicks;
     private readonly ISynchronizerService _synchronizerService;
     private readonly IServiceProvider _serviceProvider;
     private readonly ILoadoutManager _loadoutManager;
@@ -497,21 +496,10 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
             CleanDirectories(foldersWithDeletedFiles, newState, loadout.InstallationInstance);
         }
 
-        // Afterburn: archive cleanup reads every archive in the library and scans the whole database. Running it
-        // after every apply made applying slower and caused stutter. Apply never deletes library files (removing
-        // mods from the Library runs its own cleanup), so it now runs in the background, at most every 10 minutes.
-        var now = Environment.TickCount64;
-        var last = Interlocked.Read(ref _lastArchiveCleanupTicks);
-        if ((last == 0 || now - last >= (long)TimeSpan.FromMinutes(10).TotalMilliseconds)
-            && Interlocked.CompareExchange(ref _lastArchiveCleanupTicks, now, last) == last)
-        {
-            var backgroundCleanup = Task.Run(async () =>
-            {
-                try { await _garbageCollectorRunner.RunAsync(); }
-                catch (Exception e) { Logger.LogWarning(e, "Background archive cleanup failed"); }
-            });
-        }
-
+        // Afterburn: archive cleanup reads every archive in the library, scans the whole database and locks the file
+        // store while it runs, so installs and applies have to wait for it. Apply never deletes library files, so the
+        // cleanup is only scheduled here: it runs once nothing has asked for it for a few minutes.
+        await _garbageCollectorRunner.RunWithMode(GarbageCollectorRunMode.RunAsyncInBackground);
 
         return loadout;
     }
@@ -995,6 +983,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     /// <inheritdoc />
     public virtual async Task<Loadout.ReadOnly> Synchronize(Loadout.ReadOnly loadout, SynchronizeLoadoutJob? job = null)
     {
+        using var applying = ApplyTracker.Begin();
         loadout = loadout.Rebase();
         
         // Update locator IDs before building the sync tree

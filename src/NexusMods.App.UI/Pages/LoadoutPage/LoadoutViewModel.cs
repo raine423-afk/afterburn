@@ -1,4 +1,6 @@
 using System.Reactive.Disposables;
+using Avalonia.Threading;
+using NexusMods.Abstractions.Games;
 using DynamicData;
 using DynamicData.Kernel;
 using Microsoft.Extensions.DependencyInjection;
@@ -61,6 +63,13 @@ public class LoadoutViewModel : APageViewModel<ILoadoutViewModel>, ILoadoutViewM
     // Afterburn: the Rules tab (load order and file conflicts) is built the first time it's opened, not with every page.
     private readonly Lazy<ISortingSelectionViewModel> _rulesSection;
     public ISortingSelectionViewModel RulesSectionViewModel => _rulesSection.Value;
+
+    public bool HasConflictReport { get; }
+    private BindableReactiveProperty<ConflictReport?> LatestConflictReport { get; } = new();
+    IReadOnlyBindableReactiveProperty<ConflictReport?> ILoadoutViewModel.LatestConflictReport => LatestConflictReport;
+    private BindableReactiveProperty<bool> IsCheckingConflicts { get; } = new();
+    IReadOnlyBindableReactiveProperty<bool> ILoadoutViewModel.IsCheckingConflicts => IsCheckingConflicts;
+    public ReactiveCommand<Unit> CommandCheckConflicts { get; }
 
     public bool IsCollection { get; }
     private BindableReactiveProperty<string> CollectionName { get; }
@@ -471,6 +480,33 @@ public class LoadoutViewModel : APageViewModel<ILoadoutViewModel>, ILoadoutViewM
 
         HasRulesSection = true;
 
+        // Afterburn: the Conflicts tab shows the full report of the last conflict check.
+        var conflictReports = serviceProvider.GetService<IConflictReportProvider>();
+        HasConflictReport = conflictReports is not null;
+        CommandCheckConflicts = new ReactiveCommand<Unit>(async (_, cancellationToken) =>
+            {
+                if (conflictReports is null) return;
+                IsCheckingConflicts.Value = true;
+                try
+                {
+                    var report = await Task.Run(() => conflictReports.RunNowAsync(loadoutId, cancellationToken), cancellationToken);
+                    LatestConflictReport.Value = report;
+                }
+                catch (OperationCanceledException)
+                {
+                    // page closed
+                }
+                catch (Exception e)
+                {
+                    _notificationService.ShowToast($"The conflict check failed: {e.Message}", ToastNotificationVariant.Failure);
+                }
+                finally
+                {
+                    IsCheckingConflicts.Value = false;
+                }
+            }
+        );
+
         SelectedSubTab = selectedSubTab switch
         {
             { HasValue: true, Value: LoadoutPageSubTabs.Rules } => HasRulesSection ? LoadoutPageSubTabs.Rules : LoadoutPageSubTabs.Mods,
@@ -529,6 +565,27 @@ public class LoadoutViewModel : APageViewModel<ILoadoutViewModel>, ILoadoutViewM
         this.WhenActivated(disposables =>
             {
                 Adapter.Activate().AddTo(disposables);
+
+                if (conflictReports is not null)
+                {
+                    Action<LoadoutId, ConflictReport> onReport = (id, report) =>
+                    {
+                        if (id.Equals(loadoutId)) Dispatcher.UIThread.Post(() => LatestConflictReport.Value = report);
+                    };
+                    conflictReports.ReportChanged += onReport;
+                    disposables.Add(System.Reactive.Disposables.Disposable.Create(() => conflictReports.ReportChanged -= onReport));
+
+                    // The saved report is read from the game folder, so read it off the UI thread.
+                    if (LatestConflictReport.Value is null)
+                    {
+                        _ = Task.Run(() => conflictReports.GetLatest(loadoutId)).ContinueWith(task =>
+                            {
+                                if (task.IsCompletedSuccessfully && task.Result is { } saved)
+                                    Dispatcher.UIThread.Post(() => LatestConflictReport.Value ??= saved);
+                            }, TaskScheduler.Default
+                        );
+                    }
+                }
 
                 Adapter.MessageSubject.SubscribeAwait(async (message, cancellationToken) =>
                     {

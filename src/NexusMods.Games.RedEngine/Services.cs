@@ -21,6 +21,7 @@ public static class Services
             .AddSingleton<RedModSortOrderVariety, RedModSortOrderVariety>()
             .AddSingleton<ITool, RunCyberpunk2077Game>()
             .AddSingleton<Cyberpunk2077.ConflictResolver.CyberpunkConflictResolver>()
+            .AddSingleton<NexusMods.Abstractions.Games.IConflictReportProvider>(static s => s.GetRequiredService<Cyberpunk2077.ConflictResolver.CyberpunkConflictResolver>())
             .AddSingleton<ITool, RedModDeployTool>()
             // Diagnostics
             

@@ -94,10 +94,10 @@ public static class LibrarySnapshots
         var key = $"{filter.LoadoutId.Value}/{filter.Game.NexusModsGameId}";
         return Shared.GetOrAdd(key, _ =>
         {
-            var changes = Observable.Merge(
-                connection.ObserveDatoms(SliceDescriptor.Create(connection.AttributeCache.GetAttributeId(NexusModsLibraryItem.ModPageMetadata.Id))).Select(static _ => 0),
-                connection.ObserveDatoms(SliceDescriptor.Create(connection.AttributeCache.GetAttributeId(LibraryLinkedLoadoutItem.LibraryItem.Id))).Select(static _ => 0),
-                connection.ObserveDatoms(SliceDescriptor.Create(connection.AttributeCache.GetAttributeId(CollectionDownloadNexusMods.FileMetadata.Id))).Select(static _ => 0)
+            var changes = AttributeChangeSignal.Observe(connection,
+                NexusModsLibraryItem.ModPageMetadata,
+                LibraryLinkedLoadoutItem.LibraryItem,
+                CollectionDownloadNexusMods.FileMetadata
             );
 
             return changes

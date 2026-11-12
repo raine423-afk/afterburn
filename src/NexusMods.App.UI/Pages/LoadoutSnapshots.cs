@@ -127,11 +127,11 @@ public static class LoadoutSnapshots
         {
             // Anything that can change which mods are installed, which mod page they belong to, or whether they (or
             // their collection) are enabled or required.
-            var changes = Observable.Merge(
-                connection.ObserveDatoms(SliceDescriptor.Create(connection.AttributeCache.GetAttributeId(LibraryLinkedLoadoutItem.LibraryItem.Id))).Select(static _ => 0),
-                connection.ObserveDatoms(SliceDescriptor.Create(connection.AttributeCache.GetAttributeId(LoadoutItem.Disabled.Id))).Select(static _ => 0),
-                connection.ObserveDatoms(SliceDescriptor.Create(connection.AttributeCache.GetAttributeId(NexusModsLibraryItem.ModPageMetadata.Id))).Select(static _ => 0),
-                connection.ObserveDatoms(SliceDescriptor.Create(connection.AttributeCache.GetAttributeId(NexusCollectionItemLoadoutGroup.IsRequired.Id))).Select(static _ => 0)
+            var changes = AttributeChangeSignal.Observe(connection,
+                LibraryLinkedLoadoutItem.LibraryItem,
+                LoadoutItem.Disabled,
+                NexusModsLibraryItem.ModPageMetadata,
+                NexusCollectionItemLoadoutGroup.IsRequired
             );
 
             return changes

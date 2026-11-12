@@ -340,12 +340,12 @@ public class CollectionDownloader
     /// <summary>Fires when anything that can change a collection download's status changes.</summary>
     private IObservable<int> StatusChanges()
     {
-        return System.Reactive.Linq.Observable.Merge(
-            _connection.ObserveDatoms(SliceDescriptor.Create(_connection.AttributeCache.GetAttributeId(NexusModsLibraryItem.FileMetadata.Id))).Select(static _ => 0),
-            _connection.ObserveDatoms(SliceDescriptor.Create(_connection.AttributeCache.GetAttributeId(LibraryFile.Md5.Id))).Select(static _ => 0),
-            _connection.ObserveDatoms(SliceDescriptor.Create(_connection.AttributeCache.GetAttributeId(NexusCollectionBundledLoadoutGroup.BundleDownload.Id))).Select(static _ => 0),
-            _connection.ObserveDatoms(SliceDescriptor.Create(_connection.AttributeCache.GetAttributeId(LibraryLinkedLoadoutItem.LibraryItem.Id))).Select(static _ => 0),
-            _connection.ObserveDatoms(SliceDescriptor.Create(_connection.AttributeCache.GetAttributeId(LoadoutItem.Parent.Id))).Select(static _ => 0)
+        return AttributeChangeSignal.Observe(_connection,
+            NexusModsLibraryItem.FileMetadata,
+            LibraryFile.Md5,
+            NexusCollectionBundledLoadoutGroup.BundleDownload,
+            LibraryLinkedLoadoutItem.LibraryItem,
+            LoadoutItem.Parent
         ).StartWith(0);
     }
 

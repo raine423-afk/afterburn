@@ -1,3 +1,4 @@
+using NexusMods.Abstractions.Games;
 using NexusMods.Abstractions.NexusModsLibrary.Models;
 using NexusMods.Abstractions.NexusWebApi.Types;
 using NexusMods.App.UI.Controls.Navigation;
@@ -18,6 +19,12 @@ public interface ILoadoutViewModel : IPageViewModelInterface
     LoadoutPageSubTabs SelectedSubTab { get; }
     bool HasRulesSection { get; }
     ISortingSelectionViewModel RulesSectionViewModel { get; }
+
+    // Afterburn: full report of the last conflict check, shown on the Conflicts tab.
+    bool HasConflictReport { get; }
+    IReadOnlyBindableReactiveProperty<ConflictReport?> LatestConflictReport { get; }
+    IReadOnlyBindableReactiveProperty<bool> IsCheckingConflicts { get; }
+    ReactiveCommand<Unit> CommandCheckConflicts { get; }
 
     bool IsCollection { get; }
     IReadOnlyBindableReactiveProperty<bool> IsCollectionUploaded { get; }

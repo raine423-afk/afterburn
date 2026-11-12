@@ -13,6 +13,8 @@
     xmlns:search="clr-namespace:NexusMods.App.UI.Controls.Search"
     xmlns:sorting="clr-namespace:NexusMods.App.UI.Pages.Sorting"
     xmlns:pageHeader="clr-namespace:NexusMods.App.UI.Controls.PageHeader"
+    xmlns:games="clr-namespace:NexusMods.Abstractions.Games;assembly=NexusMods.Abstractions.Games"
+    xmlns:sys="using:System"
     mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
     x:Class="NexusMods.App.UI.Pages.LoadoutPage.LoadoutView">
 
@@ -289,6 +291,66 @@
 
                 <sorting:SortingSelectionView x:Name="SortingSelectionView" Margin="24 12 24 0" />
 
+            </TabItem>
+
+            <!-- Afterburn: conflicts tab, the full report of the last conflict check -->
+            <TabItem x:Name="ConflictsTabItem">
+                <TabItem.Header>
+                    <StackPanel Classes="TabItemHeaderStack">
+                        <TextBlock Text="Conflicts" />
+                        <Border x:Name="ConflictsCountBorder" IsVisible="False">
+                            <TextBlock x:Name="ConflictsCount" />
+                        </Border>
+                    </StackPanel>
+                </TabItem.Header>
+
+                <DockPanel Margin="24 12 24 0">
+                    <DockPanel DockPanel.Dock="Top" Margin="0 0 0 16">
+                        <Button x:Name="ButtonCheckConflicts"
+                                DockPanel.Dock="Right"
+                                VerticalAlignment="Top"
+                                Margin="16 0 0 0"
+                                Content="Check now" />
+                        <TextBlock x:Name="ConflictsSummaryText"
+                                   Theme="{StaticResource BodyMDNormalTheme}"
+                                   Foreground="{StaticResource NeutralStrongBrush}"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap" />
+                    </DockPanel>
+
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="ConflictSections" Margin="0 0 0 24">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="games:ConflictReportSection">
+                                    <StackPanel Margin="0 0 0 20" Spacing="4">
+                                        <TextBlock Theme="{StaticResource BodyMDSemiTheme}"
+                                                   Foreground="{StaticResource NeutralStrongBrush}"
+                                                   TextWrapping="Wrap">
+                                            <Run Text="{Binding Title}" />
+                                            <Run Text="{Binding Items.Count, StringFormat='({0})'}" />
+                                        </TextBlock>
+                                        <TextBlock Theme="{StaticResource BodySMNormalTheme}"
+                                                   Foreground="{StaticResource NeutralSubduedBrush}"
+                                                   TextWrapping="Wrap"
+                                                   IsVisible="{Binding Explanation, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                   Text="{Binding Explanation}" />
+                                        <ItemsControl ItemsSource="{Binding Items}" Margin="12 4 0 0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="sys:String">
+                                                    <SelectableTextBlock Theme="{StaticResource BodyMDNormalTheme}"
+                                                                         Foreground="{StaticResource NeutralStrongBrush}"
+                                                                         TextWrapping="Wrap"
+                                                                         Margin="0 2"
+                                                                         Text="{Binding StringFormat='• {0}'}" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
             </TabItem>
 
         </TabControl>

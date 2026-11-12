@@ -4,6 +4,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.ReactiveUI;
 using Avalonia.Platform;
+using Avalonia.Threading;
+using NexusMods.Abstractions.Loadouts;
 using NexusMods.App.UI.Extensions;
 using ReactiveUI;
 
@@ -83,6 +85,13 @@ public partial class MainWindow : ReactiveWindow<MainWindowViewModel>
                 .OnUI()
                 .Where(static shouldBringToFront => shouldBringToFront)
                 .Subscribe(_ => {
+                    // Afterburn: opened again while an apply was finishing in the background.
+                    if (!IsVisible)
+                    {
+                        _closeAfterApply = false;
+                        Show();
+                    }
+
                     if (WindowState == WindowState.Minimized)
                         WindowState = WindowState.Normal;
 
@@ -91,10 +100,33 @@ public partial class MainWindow : ReactiveWindow<MainWindowViewModel>
         });
     }
 
+    private bool _closeAfterApply;
+
     protected override void OnClosing(WindowClosingEventArgs e)
     {
+        // Afterburn: closing in the middle of an apply loses track of the files it already wrote, and the next apply
+        // then re-checks all of them ("Collecting files" for minutes). Hide the window and let the apply finish first.
+        if (ApplyTracker.IsApplying && !_closeAfterApply)
+        {
+            e.Cancel = true;
+            _closeAfterApply = true;
+            Hide();
+            _ = CloseWhenApplyFinishes();
+            return;
+        }
+
         ViewModel?.OnClose();
         base.OnClosing(e);
+    }
+
+    private async Task CloseWhenApplyFinishes()
+    {
+        var giveUpAt = DateTime.UtcNow.AddMinutes(15);
+        while (_closeAfterApply && ApplyTracker.IsApplying && DateTime.UtcNow < giveUpAt)
+            await Task.Delay(500);
+
+        if (!_closeAfterApply) return; // the window was opened again
+        Dispatcher.UIThread.Post(Close);
     }
     
     

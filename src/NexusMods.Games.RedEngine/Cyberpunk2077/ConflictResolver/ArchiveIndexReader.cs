@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace NexusMods.Games.RedEngine.Cyberpunk2077.ConflictResolver;
 
 /// <summary>
@@ -10,47 +12,61 @@ internal static class ArchiveIndexReader
     private const int HeaderSize = 40;
     private const int IndexHeaderSize = 32;
     private const int FileEntrySize = 56;
+    private const int EntriesPerChunk = 1024;
 
-    /// <summary>Returns the 64-bit name hashes of every resource in the archive, or null if it can't be read.</summary>
-    public static HashSet<ulong>? TryReadResourceHashes(string path)
+    /// <summary>
+    /// Returns the 64-bit name hashes of every resource in the archive, sorted and without duplicates, or null if it
+    /// can't be read. Only the entry table is read, in small chunks through one pooled buffer.
+    /// </summary>
+    public static ulong[]? TryReadResourceHashes(string path)
     {
+        byte[]? buffer = null;
         try
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, FileOptions.RandomAccess);
-            using var reader = new BinaryReader(stream);
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1, FileOptions.RandomAccess);
             if (stream.Length < HeaderSize) return null;
 
-            if (reader.ReadUInt32() != Magic) return null;
-            _ = reader.ReadUInt32();                 // version
-            var indexPosition = reader.ReadUInt64();
-            _ = reader.ReadUInt32();                 // index size
+            Span<byte> header = stackalloc byte[HeaderSize];
+            stream.ReadExactly(header);
+            if (BitConverter.ToUInt32(header[..4]) != Magic) return null;
+            var indexPosition = BitConverter.ToUInt64(header.Slice(8, 8));
 
             if (indexPosition + IndexHeaderSize > (ulong)stream.Length) return null;
             stream.Position = (long)indexPosition;
 
-            _ = reader.ReadUInt32();                 // file table offset
-            _ = reader.ReadUInt32();                 // file table size
-            _ = reader.ReadUInt64();                 // crc
-            var entryCount = reader.ReadUInt32();
-            _ = reader.ReadUInt32();                 // segment count
-            _ = reader.ReadUInt32();                 // dependency count
+            Span<byte> indexHeader = stackalloc byte[IndexHeaderSize];
+            stream.ReadExactly(indexHeader);
+            var entryCount = BitConverter.ToUInt32(indexHeader.Slice(16, 4));
 
             if (entryCount > 5_000_000) return null;
-            if (stream.Position + (long)entryCount * FileEntrySize > stream.Length) return null;
+            var tableSize = (long)entryCount * FileEntrySize;
+            if (stream.Position + tableSize > stream.Length) return null;
 
-            var hashes = new HashSet<ulong>((int)entryCount);
-            var entry = new byte[FileEntrySize];
-            for (var i = 0; i < entryCount; i++)
+            // Read the table in small chunks, keeping only the 8-byte hash of each 56-byte entry.
+            buffer = ArrayPool<byte>.Shared.Rent(EntriesPerChunk * FileEntrySize);
+            var hashes = new ulong[entryCount];
+            for (var done = 0; done < hashes.Length;)
             {
-                if (stream.Read(entry, 0, FileEntrySize) != FileEntrySize) return null;
-                hashes.Add(BitConverter.ToUInt64(entry, 0));
+                var count = Math.Min(EntriesPerChunk, hashes.Length - done);
+                stream.ReadExactly(buffer, 0, count * FileEntrySize);
+                for (var i = 0; i < count; i++)
+                    hashes[done + i] = BitConverter.ToUInt64(buffer, i * FileEntrySize);
+                done += count;
             }
 
-            return hashes;
+            Array.Sort(hashes);
+            var unique = 0;
+            for (var i = 0; i < hashes.Length; i++)
+                if (i == 0 || hashes[i] != hashes[unique - 1]) hashes[unique++] = hashes[i];
+            return unique == hashes.Length ? hashes : hashes[..unique];
         }
         catch
         {
             return null;
+        }
+        finally
+        {
+            if (buffer is not null) ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 }
