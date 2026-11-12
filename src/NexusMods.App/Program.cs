@@ -41,6 +41,30 @@ public class Program
     /// Afterburn keeps its data in %LOCALAPPDATA%\Afterburn. If an older "NexusMods.App" data folder exists and no Afterburn
     /// folder does yet, it is renamed (instant, same drive) so no library or settings are lost.
     /// </summary>
+    // Saved settings may contain the old folder's full path; point them at the new folder.
+    private static void FixMovedPaths(string newDir, string oldDir)
+    {
+        try
+        {
+            var configs = System.IO.Path.Combine(newDir, "Configs");
+            if (!System.IO.Directory.Exists(configs)) return;
+            foreach (var file in System.IO.Directory.EnumerateFiles(configs, "*.json", System.IO.SearchOption.AllDirectories))
+            {
+                try
+                {
+                    var text = System.IO.File.ReadAllText(file);
+                    var fixedText = text
+                        .Replace(oldDir.Replace("\\", "\\\\"), newDir.Replace("\\", "\\\\"), StringComparison.OrdinalIgnoreCase)
+                        .Replace(oldDir, newDir, StringComparison.OrdinalIgnoreCase)
+                        .Replace(oldDir.Replace('\\', '/'), newDir.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase);
+                    if (fixedText != text) System.IO.File.WriteAllText(file, fixedText);
+                }
+                catch { /* leave this file as it is */ }
+            }
+        }
+        catch { /* not critical */ }
+    }
+
     private static void MigrateLegacyDataFolder()
     {
         try
@@ -50,7 +74,10 @@ public class Program
             var oldDir = System.IO.Path.Combine(root, "NexusMods.App");
             var newDir = System.IO.Path.Combine(root, "Afterburn");
             if (System.IO.Directory.Exists(oldDir) && !System.IO.Directory.Exists(newDir))
+            {
                 System.IO.Directory.Move(oldDir, newDir);
+                FixMovedPaths(newDir, oldDir);
+            }
         }
         catch
         {
