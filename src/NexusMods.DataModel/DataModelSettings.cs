@@ -106,7 +106,7 @@ public record DataModelSettings : ISettings
         );
 
         // NOTE: OSX ".App" is apparently special, using _ instead of . to prevent weirdness
-        baseDirectoryName = os.IsOSX ? "NexusMods_App" : "NexusMods.App";
+        baseDirectoryName = os.IsOSX ? "NexusMods_App" : "Afterburn";
         return baseKnownPath;
     }
 }

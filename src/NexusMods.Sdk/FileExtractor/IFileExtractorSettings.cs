@@ -24,7 +24,7 @@ public record FileExtractorSettings : ISettings
     [JsonIgnore]
     public ConfigurablePath TempFolderLocation => TempFolderLocations.Length > 0
         ? TempFolderLocations[0]
-        : new ConfigurablePath(KnownPath.TempDirectory, "NexusMods.App/Temp");
+        : new ConfigurablePath(KnownPath.TempDirectory, "Afterburn/Temp");
 
     /// <inheritdoc/>
     public static ISettingsBuilder Configure(ISettingsBuilder settingsBuilder)
@@ -68,7 +68,7 @@ public record FileExtractorSettings : ISettings
 
         return new FileExtractorSettings
         {
-            TempFolderLocations = [new ConfigurablePath(baseKnownPath, "NexusMods.App/Temp")],
+            TempFolderLocations = [new ConfigurablePath(baseKnownPath, "Afterburn/Temp")],
         };
     }
 }

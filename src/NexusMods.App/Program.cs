@@ -37,6 +37,27 @@ public class Program
 {
     private static ILogger<Program> _logger = default!;
 
+    /// <summary>
+    /// Afterburn keeps its data in %LOCALAPPDATA%\Afterburn. If an older "NexusMods.App" data folder exists and no Afterburn
+    /// folder does yet, it is renamed (instant, same drive) so no library or settings are lost.
+    /// </summary>
+    private static void MigrateLegacyDataFolder()
+    {
+        try
+        {
+            if (!OperatingSystem.IsWindows()) return;
+            var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var oldDir = System.IO.Path.Combine(root, "NexusMods.App");
+            var newDir = System.IO.Path.Combine(root, "Afterburn");
+            if (System.IO.Directory.Exists(oldDir) && !System.IO.Directory.Exists(newDir))
+                System.IO.Directory.Move(oldDir, newDir);
+        }
+        catch
+        {
+            // Not critical: Afterburn simply starts with a fresh data folder.
+        }
+    }
+
     [STAThread]
     public static int Main(string[] args)
     {
@@ -45,6 +66,8 @@ public class Program
             ConsoleHelper.EnsureConsole();
 
         MainThreadData.SetMainThread();
+
+        MigrateLegacyDataFolder();
 
         LoggingSettings loggingSettings;
         ExperimentalSettings experimentalSettings;

@@ -69,3 +69,5 @@ All changes made 2026-11-09 unless noted.
 - **Faster library processing:** mods are compressed with Zstandard level 3 instead of 16/9 when added to the library (`NxFileStore.cs`).
 - **Release compliance:** README sections on downloads and where to get the source for each release; tagged releases publish the installer next to the source (`build.yaml`); licenses for bundled third-party components are included with the app (`THIRD-PARTY-NOTICES.md`).
 - **Security update:** OpenTelemetry packages updated from 1.12.0 to 1.15.3 to fix GHSA-4625-4j76-fww9 (`Directory.Packages.props`). Telemetry stays disabled.
+- **Afterburn data folders:** settings, logs, temp files, the file-hash database and Steam login now live in `%LOCALAPPDATA%\Afterburn` instead of `NexusMods.App`; an existing `NexusMods.App` folder is renamed on first start (`Program.cs`, `LoggingSettings.cs`, `JsonStorageBackend.cs`, `DataModelSettings.cs`, `CliSettings.cs`, `FileHashesServiceSettings.cs`, `IFileExtractorSettings.cs`, `AppDirectoryAuthStorage.cs`).
+- **Installer:** the install-location page is always shown so Afterburn can be installed to any drive (`installer/afterburn.iss`).

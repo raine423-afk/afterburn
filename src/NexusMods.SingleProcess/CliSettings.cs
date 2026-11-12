@@ -33,14 +33,14 @@ public class CliSettings() : ISettings
     {
         var fs = provider.GetRequiredService<IFileSystem>();
         var directory = fs.OS.MatchPlatform(
-            () => fs.GetKnownPath(KnownPath.LocalApplicationDataDirectory).Combine("NexusMods.App"),
+            () => fs.GetKnownPath(KnownPath.LocalApplicationDataDirectory).Combine("Afterburn"),
             () => fs.GetKnownPath(KnownPath.XDG_RUNTIME_DIR),
             () => fs.GetKnownPath(KnownPath.ApplicationDataDirectory).Combine("NexusMods_App")
         );
 
         return new CliSettings
         {
-            SyncFile = directory.Combine("NexusMods.App-sync_file.sync"),
+            SyncFile = directory.Combine("Afterburn-sync_file.sync"),
         };
     }
 
