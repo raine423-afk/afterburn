@@ -146,7 +146,8 @@ internal class GameLocationsService : IGameLocationsService
         var existingHash = await GetExistingHash(hashesDb: _fileHashesService.Current, file, gamePath, cancellationToken);
         if (existingHash.HasValue) return existingHash.Value;
 
-        _logger.LogDebug("Didn't find matching hash data for file `{Path}`, falling back to a full hash", file);
+        // Afterburn: Trace, not Debug. This fires for every mod file a scan reads (thousands), filling the log.
+        _logger.LogTrace("Didn't find matching hash data for file `{Path}`, falling back to a full hash", file);
         var hash = await file.XxHash3Async(token: cancellationToken);
         return hash;
     }

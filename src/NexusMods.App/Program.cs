@@ -367,7 +367,14 @@ public class Program
             config.AddRuleForAllLevels(consoleTarget);
         }
 
-        config.AddRuleForAllLevels(fileTarget);
+        // Afterburn: write the log file from a background thread. Written directly, every log line was a file write
+        // (and flush) on whatever thread logged it, including the UI thread and the database's write thread.
+        var asyncFileTarget = new NLog.Targets.Wrappers.AsyncTargetWrapper(fileTarget)
+        {
+            Name = "file-async",
+            OverflowAction = NLog.Targets.Wrappers.AsyncTargetWrapperOverflowAction.Block,
+        };
+        config.AddRuleForAllLevels(asyncFileTarget);
         config.AddRuleForAllLevels(observableLoggingTarget);
 
 

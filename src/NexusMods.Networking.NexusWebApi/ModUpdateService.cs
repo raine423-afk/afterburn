@@ -34,6 +34,7 @@ public class ModUpdateService : IModUpdateService, IDisposable
     private readonly SourceCache<KeyValuePair<NexusModsModPageMetadataId, ModUpdatesOnModPage>, EntityId> _newestModOnAnyPageCache = new (static kv => kv.Key);
     
     private readonly IDisposable _updateObserver;
+    private readonly object _notifyLock = new();
     private DateTimeOffset _lastUpdateCheckTime = DateTimeOffset.MinValue;
 
     /// <summary/>
@@ -76,7 +77,11 @@ public class ModUpdateService : IModUpdateService, IDisposable
 
     private IDisposable ObserveUpdates()
     {
+        // Afterburn: changes arrive on the database's single write thread, and the first one lists every library item,
+        // so working out updates for every mod page here held up the database (and the app) for seconds at startup.
+        // Do the work on a background thread instead.
         return NexusModsLibraryItem.ObserveAll(_connection)
+            .ObserveOn(System.Reactive.Concurrency.TaskPoolScheduler.Default)
             .Subscribe(changes =>
             {
                 // Note(sewer): I'm not particularly happy about this, as this
@@ -119,7 +124,11 @@ public class ModUpdateService : IModUpdateService, IDisposable
                 foreach (var change in changes)
                     affectedModPage.Add(change.Current.ModPageMetadataId);
                 
-                NotifyForUpdatesOfSpecificModPages(affectedModPage);
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
+                lock (_notifyLock) NotifyForUpdatesOfSpecificModPages(affectedModPage);
+                var took = System.Diagnostics.Stopwatch.GetElapsedTime(started);
+                if (took.TotalMilliseconds > 200)
+                    _logger.LogInformation("Checked {Count} mod page(s) for updates in {Milliseconds} ms", affectedModPage.Count, (int)took.TotalMilliseconds);
             });
     }
 
@@ -190,7 +199,7 @@ public class ModUpdateService : IModUpdateService, IDisposable
             .DistinctBy(static fileMetadata => fileMetadata.Id)
             .ToDictionary(static x => x.Id, static x => x);
 
-        NotifyForUpdatesOfSpecificFiles(filesInLibrary, UpdateNewestModVersionCache, UpdateNewestModOnAnyPageCache);
+        lock (_notifyLock) NotifyForUpdatesOfSpecificFiles(filesInLibrary, UpdateNewestModVersionCache, UpdateNewestModOnAnyPageCache);
     }
     
     private void NotifyForUpdatesOfSpecificFiles(
