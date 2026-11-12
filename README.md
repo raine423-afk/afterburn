@@ -89,15 +89,6 @@ Afterburn is free software under the **GNU General Public License v3.0**, the sa
 Copyright for the original code belongs to Nexus Mods and its contributors. Afterburn's changes are also licensed under GPL-3.0.
 Third-party components and their licenses are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
-## Code signing policy
-
-Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
-
-(Applies once Afterburn is accepted into the SignPath Foundation program. Until then, releases are not signed.)
-
-- **Authors, reviewers and approvers:** [raine423-afk](https://github.com/raine423-afk), the project owner. Every signing request is approved by hand, and the owner's GitHub account uses multi-factor authentication.
-- Only binaries built automatically from this repository's source code are signed. Afterburn signs only its own files, never third-party programs.
-
 ## Privacy policy
 
 Afterburn does not collect or send usage data, analytics or crash reports. It connects to the internet only when you use a feature that needs it: Nexus Mods (to log in with your API key, browse and download the mods you choose) and GitHub (to check for updates and send a bug report if you press "Report a bug"). Your settings, mods and API key (encrypted for your Windows user) stay on your computer.
