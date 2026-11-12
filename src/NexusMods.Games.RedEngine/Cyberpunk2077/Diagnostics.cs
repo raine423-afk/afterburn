@@ -283,4 +283,32 @@ The current WINE prefix does not have the required packages installed for moddin
             .AddValue<string>("Instructions")
         )
         .Finish();
+
+    [DiagnosticTemplate]
+    [UsedImplicitly]
+    internal static IDiagnosticTemplate OutdatedRedscript = DiagnosticTemplateBuilder
+        .Start()
+        .WithId(new DiagnosticId(Source, number: 7))
+        .WithTitle("redscript is too old for this game version")
+        .WithSeverity(DiagnosticSeverity.Critical)
+        .WithSummary("The installed redscript (built {BuildDate}) can't read this game version's scripts, so script mods won't work.")
+        .WithDetails("""
+The redscript files in the game folder were built on {BuildDate}. This game version needs redscript 0.5.32 or newer (built 2026-10-22 or later). With the older files the game shows "Failed to load the original script cache" on start and every script mod is turned off.
+
+A download can be labelled 0.5.32 and still contain older files, so this check looks at the files themselves.
+
+### How to Resolve
+1. Download the newest main file from {RedscriptLink} and add it to the loadout.
+2. Switch off or remove the older redscript.
+3. Apply, then start the game.
+
+### Technical Details
+Checked file: `{CompilerFile}`
+""")
+        .WithMessageData(messageBuilder => messageBuilder
+            .AddValue<NamedLink>("RedscriptLink")
+            .AddValue<string>("BuildDate")
+            .AddValue<string>("CompilerFile")
+        )
+        .Finish();
 }

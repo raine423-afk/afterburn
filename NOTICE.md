@@ -75,3 +75,4 @@ All changes made 2026-11-09 unless noted.
 - **Turn off animations:** new option in Settings > General that removes interface transitions (`BehaviorSettings.cs`, `App.axaml.cs`).
 - **Saved paths after folder move:** settings files that mention the old data folder are updated to the new one (`Program.cs`).
 - **API key memory:** the memory block holding the decrypted key is wiped before it is released (`ApiKeyStore.cs`).
+- **Outdated redscript warning:** Health Check warns when the redscript files in the game folder are too old for the game version, by checking the files instead of the download label (`OutdatedRedscriptEmitter.cs`, `Diagnostics.cs`, `Cyberpunk2077Game.cs`).
