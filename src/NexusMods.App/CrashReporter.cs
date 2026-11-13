@@ -125,6 +125,12 @@ internal static class CrashReporter
         process.WaitForExit(5000);
     }
 
+    internal static void ShowMessage(string text, string caption)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        try { MessageBoxW(IntPtr.Zero, text, caption, 0x30 | 0x40000); } catch { /* ignored */ }
+    }
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int MessageBoxW(IntPtr hWnd, string text, string caption, uint type);
 }

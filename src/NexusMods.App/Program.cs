@@ -87,6 +87,32 @@ public class Program
     }
 
     [STAThread]
+    // Afterburn: a second Afterburn started while the first is still open or still closing used to crash on the database
+    // lock. Wait for the lock to be released, then show a plain message instead of crashing.
+    private static bool WaitForDatabase()
+    {
+        var lockFile = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Afterburn", "DataModel", "MnemonicDB.rocksdb", "LOCK");
+        if (!System.IO.File.Exists(lockFile)) return true;
+
+        var deadline = DateTime.UtcNow.AddSeconds(25);
+        while (true)
+        {
+            try
+            {
+                using var stream = new System.IO.FileStream(lockFile, System.IO.FileMode.Open, System.IO.FileAccess.ReadWrite, System.IO.FileShare.None);
+                return true;
+            }
+            catch (System.IO.IOException) { }
+            catch (UnauthorizedAccessException) { }
+
+            if (DateTime.UtcNow >= deadline) break;
+            Thread.Sleep(500);
+        }
+
+        CrashReporter.ShowMessage("Afterburn is already running, or is still closing. Close the other Afterburn window, wait a few seconds, then start it again.", "Afterburn");
+        return false;
+    }
+
     public static int Main(string[] args)
     {
         // This code will not work properly if it comes after anything that uses the console. So we need to do this first.
@@ -121,6 +147,8 @@ public class Program
         catch { /* the crash log is optional */ }
 
         var startupMode = StartupMode.Parse(args);
+        try { if (startupMode.RunAsMain && startupMode.ShowUI && !WaitForDatabase()) return 0; }
+        catch { /* never block startup on this check */ }
         using var host = BuildHost(
             startupMode,
             loggingSettings,

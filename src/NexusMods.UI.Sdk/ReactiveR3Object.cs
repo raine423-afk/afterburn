@@ -22,7 +22,10 @@ public class ReactiveR3Object : IReactiveR3Object
     /// <inheritdoc />
     public IDisposable Activate()
     {
-        _activation.OnNext(true);
+        // Afterburn: activating an already-disposed object used to throw and close the whole app.
+        if (_isDisposed) return Disposable.Empty;
+        try { _activation.OnNext(true); }
+        catch (ObjectDisposedException) { return Disposable.Empty; }
 
         // NOTE(erri120): Using WeakReference to allow this instance to be cleaned up, even if
         // the disposable is kept around. Since the disposable is only calling Deactivate() which
