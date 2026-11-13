@@ -155,7 +155,9 @@ public sealed class JobMonitor : IJobMonitor, IDisposable
             var job = ((IJob)ctx);
             if (job.Status == JobStatus.Failed)
             {
-                if (ctx.TryGetException(out var ex))
+                if (ctx.TryGetException(out var ex) && ex!.ToString().Contains("Found no installer that supports"))
+                    _logger.LogWarning(ex, "Job {JobId} of type {JobType} failed (no installer supports this file)", job.Id, ctx.JobType); // Afterburn: expected for loose files, must not pop up an error box
+                else if (ex is not null)
                     _logger.LogError(ex!, "Job {JobId} of type {JobType} failed", job.Id, ctx.JobType);
                 else
                     _logger.LogError("Job {JobId} of type {JobType} failed", job.Id, ctx.JobType);
