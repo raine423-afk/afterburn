@@ -161,14 +161,7 @@
                                                      Fill="None"
                                                      LeftIcon="{x:Static icons:IconValues.Refresh}"
                                                      ToolTip.Tip="{x:Static resources:Language.FileOriginsPage_CheckForUpdates_ToolTip}" />
-                            <controls:StandardButton x:Name="InstallAllButton"
-                                                     Text="Install all"
-                                                     ShowIcon="Left"
-                                                     Size="Toolbar"
-                                                     Type="Primary"
-                                                     Fill="WeakAlt"
-                                                     LeftIcon="{x:Static icons:IconValues.Download}"
-                                                     ToolTip.Tip="Add every mod in your library to this loadout" />
+
                             <controls:StandardButton x:Name="UpdateAllButton"
                                                      Text="{x:Static resources:Language.FileOriginPage_UpdateAll}"
                                                      ShowIcon="Left"
