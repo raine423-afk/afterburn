@@ -162,7 +162,7 @@ public static class ServiceExtensions
     /// </summary>
     public static IServiceCollection AddFileExtractors(this IServiceCollection coll)
     {
-        coll.AddSettings<FileExtractorSettings>();
+        coll.AddSettings<FileExtractorSettings>().AddSettings<CrashLogSettings>();
         coll.AddFileExtractorVerbs();
         coll.AddSingleton<IFileExtractor, FileExtractor.FileExtractor>();
         coll.AddSingleton<IExtractor, SevenZipExtractor>();

@@ -98,15 +98,27 @@ public class Program
         MigrateLegacyDataFolder();
 
         LoggingSettings loggingSettings;
+        CrashLogSettings crashLogSettings;
         ExperimentalSettings experimentalSettings;
         GameLocatorSettings gameLocatorSettings;
         using (var settingsHost = BuildSettingsHost())
         {
             var settingsManager = settingsHost.Services.GetRequiredService<ISettingsManager>();
             loggingSettings = settingsManager.Get<LoggingSettings>();
+            crashLogSettings = settingsManager.Get<CrashLogSettings>();
             experimentalSettings = settingsManager.Get<ExperimentalSettings>();
             gameLocatorSettings = settingsManager.Get<GameLocatorSettings>();
         }
+
+        try
+        {
+            var crashFs = FileSystem.Shared;
+            CrashReporter.Install(
+                crashLogSettings.CrashLogFolder.ToPath(crashFs).GetFullPath(),
+                loggingSettings.MainProcessLogFilePath.ToPath(crashFs).GetFullPath()
+            );
+        }
+        catch { /* the crash log is optional */ }
 
         var startupMode = StartupMode.Parse(args);
         using var host = BuildHost(
@@ -333,6 +345,7 @@ public class Program
                 .AddSettings<LoggingSettings>()
                 .AddSettings<ExperimentalSettings>()
                 .AddSettings<GameLocatorSettings>()
+                .AddSettings<CrashLogSettings>()
             )
             .ConfigureLogging((_, builder) => builder
                 .ClearProviders()
