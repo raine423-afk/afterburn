@@ -55,6 +55,8 @@ public class UpdaterViewModel : AOverlayViewModel<IUpdaterViewModel>, IUpdaterVi
         var currentVersion = ApplicationConstants.Version;
         var installationMethod = ApplicationConstants.InstallationMethod;
         var os = OSInformation.Shared;
+        // Afterburn: the installed Windows build is not tagged as an installer build, so treat it as one.
+        if (installationMethod is InstallationMethod.Manually && os.IsWindows) installationMethod = InstallationMethod.InnoSetup;
 
         if (!UpdateChecker.ShouldCheckForUpdate(currentVersion, installationMethod)) return null;
         var updateChecker = serviceProvider.GetRequiredService<UpdateChecker>();

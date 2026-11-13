@@ -57,6 +57,7 @@ public class LibraryViewModel : APageViewModel<ILibraryViewModel>, ILibraryViewM
 
     public ReactiveCommand<Unit> UpdateAllCommand { get; }
     public ReactiveCommand<Unit> RefreshUpdatesCommand { get; }
+    public ReactiveCommand<Unit> InstallAllCommand { get; }
     public ReactiveCommand<Unit> InstallSelectedItemsCommand { get; }
 
     public ReactiveCommand<Unit> InstallSelectedItemsWithAdvancedInstallerCommand { get; }
@@ -160,6 +161,12 @@ public class LibraryViewModel : APageViewModel<ILibraryViewModel>, ILibraryViewM
             executeAsync: (_, cancellationToken) => UpdateAllItems(cancellationToken),
             awaitOperation: AwaitOperation.Sequential,
             initialCanExecute: true,
+            configureAwait: false
+        );
+
+        InstallAllCommand = new ReactiveCommand<Unit>(
+            executeAsync: (_, cancellationToken) => InstallAllItems(cancellationToken),
+            awaitOperation: AwaitOperation.Drop,
             configureAwait: false
         );
 
@@ -871,6 +878,39 @@ After asking design, we're choosing to simply open the mod page for now.
                 var updateComponent = model.GetOptional<LibraryComponents.UpdateAction>(LibraryColumns.Actions.UpdateComponentKey);
                 return updateComponent.HasValue && updateComponent.Value.NewFiles.Value.HasAnyUpdates;
             });
+    }
+
+    // Afterburn: install every library mod that is not in this loadout yet, one after the other.
+    private async ValueTask InstallAllItems(CancellationToken cancellationToken)
+    {
+        var logger = _serviceProvider.GetRequiredService<ILogger<LibraryViewModel>>();
+        var db = _connection.Db;
+        var target = GetInstallationTarget();
+        var toInstall = new List<LibraryItem.ReadOnly>();
+        foreach (var item in LibraryItem.All(db))
+        {
+            if (!item.IsValid()) continue;
+            var alreadyInstalled = LibraryLinkedLoadoutItem.FindByLibraryItem(db, item)
+                .Any(linked => linked.AsLoadoutItemGroup().AsLoadoutItem().LoadoutId == _loadout.LoadoutId);
+            if (!alreadyInstalled) toInstall.Add(item);
+        }
+
+        logger.LogInformation("Install all: {Count} library item(s) to install", toInstall.Count);
+        var failed = 0;
+        foreach (var item in toInstall)
+        {
+            if (cancellationToken.IsCancellationRequested) break;
+            try
+            {
+                await InstallLibraryItem(item, _loadout, target, cancellationToken);
+            }
+            catch (Exception e)
+            {
+                failed++;
+                logger.LogWarning(e, "Install all: failed to install {LibraryItem}", item.Name);
+            }
+        }
+        logger.LogInformation("Install all finished, {Failed} of {Count} failed", failed, toInstall.Count);
     }
 
     private LoadoutItemGroupId GetInstallationTarget() => (SelectedInstallationTarget?.Id ?? _installationTargets[0].Id).Value;

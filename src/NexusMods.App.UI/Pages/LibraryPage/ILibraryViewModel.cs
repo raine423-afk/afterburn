@@ -22,6 +22,7 @@ public interface ILibraryViewModel : IPageViewModelInterface
     public ReactiveCommand<Unit> UpdateAllCommand { get; }
     public ReactiveCommand<Unit> RefreshUpdatesCommand { get; }
 
+    ReactiveCommand<Unit> InstallAllCommand { get; }
     ReactiveCommand<Unit> InstallSelectedItemsCommand { get; }
     ReactiveCommand<Unit> InstallSelectedItemsWithAdvancedInstallerCommand { get; }
     ReactiveCommand<Unit> UpdateSelectedItemsCommand { get; }
