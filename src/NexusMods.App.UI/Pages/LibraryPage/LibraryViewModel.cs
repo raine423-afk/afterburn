@@ -59,6 +59,7 @@ public class LibraryViewModel : APageViewModel<ILibraryViewModel>, ILibraryViewM
     public ReactiveCommand<Unit> RefreshUpdatesCommand { get; }
     private bool _bulkInstall;
     private readonly List<string> _failedNames = new();
+    private readonly List<LibraryItem.ReadOnly> _unsupportedItems = new();
     public ReactiveCommand<Unit> InstallAllCommand { get; }
     public ReactiveCommand<Unit> InstallSelectedItemsCommand { get; }
 
@@ -900,6 +901,7 @@ After asking design, we're choosing to simply open the mod page for now.
         logger.LogInformation("Install all: {Count} library item(s) to install", toInstall.Count);
         var failed = 0;
         _failedNames.Clear();
+        _unsupportedItems.Clear();
         _bulkInstall = true;
         foreach (var item in toInstall)
         {
@@ -916,10 +918,24 @@ After asking design, we're choosing to simply open the mod page for now.
         }
         _bulkInstall = false;
         failed += _failedNames.Count;
+        // Afterburn: loose files that no installer supports are removed from the library.
+        var removedLoose = 0;
+        if (_unsupportedItems.Count > 0)
+        {
+            try
+            {
+                await _libraryService.RemoveLibraryItems(_unsupportedItems.ToList());
+                removedLoose = _unsupportedItems.Count;
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning(e, "Install all: failed to remove unsupported library items");
+            }
+        }
         logger.LogInformation("Install all finished, {Failed} of {Count} failed", failed, toInstall.Count);
         _notificationService.ShowToast(failed == 0
             ? $"Install all finished: {toInstall.Count} mod(s) added."
-            : $"Install all finished: {toInstall.Count - failed} added, {failed} skipped ({string.Join(", ", _failedNames.Take(5))}).");
+            : $"Install all finished: {toInstall.Count - failed} added, {failed} skipped ({string.Join(", ", _failedNames.Take(5))}). Removed {removedLoose} loose file(s) from the library.");
     }
 
     private LoadoutItemGroupId GetInstallationTarget() => (SelectedInstallationTarget?.Id ?? _installationTargets[0].Id).Value;
@@ -954,6 +970,7 @@ After asking design, we're choosing to simply open the mod page for now.
             var logger = _serviceProvider.GetRequiredService<ILogger<LibraryViewModel>>();
             logger.LogWarning(e, "Failed to install {LibraryItem}", libraryItem.Name);
             lock (_failedNames) _failedNames.Add(libraryItem.Name);
+            if (_bulkInstall && e.ToString().Contains("Found no installer that supports")) lock (_unsupportedItems) _unsupportedItems.Add(libraryItem);
             if (!_bulkInstall) _notificationService.ShowToast($"Couldn't install {libraryItem.Name}. No installer supports it - try the advanced installer.");
         }
     }
