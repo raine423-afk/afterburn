@@ -970,7 +970,7 @@ After asking design, we're choosing to simply open the mod page for now.
             var logger = _serviceProvider.GetRequiredService<ILogger<LibraryViewModel>>();
             logger.LogWarning(e, "Failed to install {LibraryItem}", libraryItem.Name);
             lock (_failedNames) _failedNames.Add(libraryItem.Name);
-            if (_bulkInstall && e.ToString().Contains("Found no installer that supports")) lock (_unsupportedItems) _unsupportedItems.Add(libraryItem);
+            if (_bulkInstall && !libraryItem.Name.Equals("collection.json", StringComparison.OrdinalIgnoreCase) && e.ToString().Contains("Found no installer that supports")) lock (_unsupportedItems) _unsupportedItems.Add(libraryItem);
             if (!_bulkInstall) _notificationService.ShowToast($"Couldn't install {libraryItem.Name}. No installer supports it - try the advanced installer.");
         }
     }
