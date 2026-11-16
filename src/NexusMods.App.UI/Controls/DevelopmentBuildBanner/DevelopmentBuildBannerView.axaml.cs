@@ -73,6 +73,6 @@ public partial class DevelopmentBuildBannerView : ReactiveUserControl<IDevelopme
 
     private static string GetAppVersion()
     {
-        return ApplicationConstants.IsDebug ? $"Debug build - {ApplicationConstants.CommitHash}" : ApplicationConstants.Version.ToString();
+        return ApplicationConstants.IsDebug ? $"Debug build - {ApplicationConstants.CommitHash}" : ApplicationConstants.Version.ToString(ApplicationConstants.Version.Build >= 0 ? 3 : 2);
     }
 }

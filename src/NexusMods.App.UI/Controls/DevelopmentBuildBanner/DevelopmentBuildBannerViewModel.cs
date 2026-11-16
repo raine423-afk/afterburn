@@ -116,7 +116,7 @@ public class DevelopmentBuildBannerViewModel : AViewModel<IDevelopmentBuildBanne
         {
             RateLimitText = dailyOut
                 ? $"Rate Meter: daily limit used up · resets {Time(s.DailyReset)}"
-                : $"Rate Meter: {N(s.DailyRemaining)}/{N(s.DailyLimit)} today";
+                : $"Rate Meter: {N(s.DailyRemaining)} of {N(s.DailyLimit)} left today";
         }
         else
         {

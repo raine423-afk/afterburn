@@ -41,6 +41,29 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     /// of modified game files. s
     /// </summary>
     private static Size MaximumBackupSize => Size.GB * 5;
+
+    /// <summary>
+    /// Afterburn: largest amount of data written into one backup archive.
+    /// </summary>
+    private static Size BackupChunkSize => Size.GB * 4;
+
+    private static IEnumerable<List<ArchivedFileEntry>> ChunkBySize(IEnumerable<ArchivedFileEntry> files, Size maxChunk)
+    {
+        var chunk = new List<ArchivedFileEntry>();
+        var chunkSize = Size.Zero;
+        foreach (var file in files)
+        {
+            if (chunk.Count > 0 && chunkSize + file.Size > maxChunk)
+            {
+                yield return chunk;
+                chunk = [];
+                chunkSize = Size.Zero;
+            }
+            chunk.Add(file);
+            chunkSize += file.Size;
+        }
+        if (chunk.Count > 0) yield return chunk;
+    }
     
     private readonly ScopedAsyncLock _lock = new();
     private readonly IFileStore _fileStore;
@@ -1213,33 +1236,22 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
             }
         );
 
+        // Afterburn: there used to be a hard 5 GB cap here that threw and blocked every Apply when a game folder held
+        // more unmanaged files than that (big manual mod setups easily pass 30 GB). The file store now checks for real
+        // free disk space instead, and the backup is written in chunks so no single archive gets huge.
         var totalSize = archivedFiles.Sum(static x => x.Size);
         if (totalSize > MaximumBackupSize)
         {
-            var nodeSignatures = files
-                .Where(static x => x.Value.Actions.HasFlag(Actions.BackupFile))
-                .Select(static x => x.Value.Signature)
-                .GroupBy(signature => signature)
-                .Select(static grp => new {Signature = grp.Key, FileCount = grp.Count()})
-                .ToList();
-            
-            Logger.LogError(
-                """
-                Cannot backup {FileCount} files with total size {TotalSize}, which exceeds maximum of {MaximumSize}. 
-                Node signatures: 
-                {Signatures}
-                """,
+            Logger.LogInformation(
+                "Backing up {FileCount} files ({TotalSize}) found in the game folder; this can take a while",
                 archivedFiles.Count,
-                totalSize,
-                MaximumBackupSize,
-                string.Join(Environment.NewLine, nodeSignatures.Select(sig => $"  - {sig.Signature}: {sig.FileCount} files"))
+                totalSize
             );
-            
-            throw new Exception($"Cannot backup files, total size is {totalSize}, which is larger than the maximum of {MaximumBackupSize}");
         }
-        
+
         // PERFORMANCE: We deduplicate above with the HaveFile call.
-        await _fileStore.BackupFiles(archivedFiles, deduplicate: false);
+        foreach (var chunk in ChunkBySize(archivedFiles, BackupChunkSize))
+            await _fileStore.BackupFiles(chunk, deduplicate: false);
 
         // Pin the files to avoid garbage collection.
         using var tx = Connection.BeginTransaction();

@@ -73,7 +73,8 @@ jobs:
           }
           $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
           if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
-          $ver = if ($env:REF_TYPE -eq 'tag') { $env:REF_NAME.TrimStart('v') } else { '1.0.0' }
+          $propsVer = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          $ver = if ($env:REF_TYPE -eq 'tag') { $env:REF_NAME.TrimStart('v') } elseif ($propsVer) { $propsVer } else { '1.0.0' }
           & $iscc installer/afterburn.iss /DAppVersion=$ver
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
