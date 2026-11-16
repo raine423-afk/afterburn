@@ -168,6 +168,29 @@ public class NxFileStore : IFileStore, IReadOnlyStreamSource
     /// <inheritdoc />
     public ValueTask<bool> HaveFile(Hash hash) => ValueTask.FromResult(_archivesByEntry.ContainsKey(hash));
 
+    private static void EnsureFreeSpace(AbsolutePath location, Size needed)
+    {
+        long free;
+        string root;
+        try
+        {
+            root = System.IO.Path.GetPathRoot(location.GetFullPath()) ?? "";
+            if (string.IsNullOrEmpty(root)) return;
+            free = new System.IO.DriveInfo(root).AvailableFreeSpace;
+        }
+        catch
+        {
+            return; // can't tell, carry on
+        }
+
+        const long headroom = 2L * 1024 * 1024 * 1024;
+        var neededBytes = (long)needed.Value;
+        if (free < neededBytes + headroom)
+            throw new IOException(
+                $"Not enough free space on {root} to back up {neededBytes / 1048576:N0} MB of game-folder files " +
+                $"(only {free / 1048576:N0} MB free). Free up space, or move Afterburn's data folder to a bigger drive, then try again.");
+    }
+
     /// <inheritdoc />
     public async Task BackupFiles(IEnumerable<ArchivedFileEntry> enumerable, bool deduplicate = true, CancellationToken token = default)
     {
@@ -197,6 +220,10 @@ public class NxFileStore : IFileStore, IReadOnlyStreamSource
         }
 
         if (filesToBackup.Count == 0) return;
+
+        // Afterburn: make sure the drive holding the backups has room before writing anything. The size before
+        // compression is an upper bound on what the archive needs, plus some headroom for the rest of the system.
+        EnsureFreeSpace(_archiveLocations.First(), filesToBackup.Values.Aggregate(Size.Zero, (sum, x) => sum + x.Item1.Size));
 
         foreach (var kv in filesToBackup)
         {
