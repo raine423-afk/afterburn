@@ -86,6 +86,68 @@ public class Program
         }
     }
 
+    // Afterburn: held for the whole life of the main (UI) process, so only one can run at a time. The old LOCK-file check
+    // below raced when two copies started within a second of each other (e.g. a double launch): both passed it, and the
+    // second then crashed opening the database.
+    private static Mutex? _singleInstanceMutex;
+
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
+
+    /// <summary>
+    /// Returns true if this process should go on starting as the main process. Returns false if another Afterburn is
+    /// already running: its window is brought to the front and this copy exits quietly.
+    /// </summary>
+    private static bool AcquireSingleInstance()
+    {
+        _singleInstanceMutex = new Mutex(initiallyOwned: false, @"Local\Afterburn.MainProcess");
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (true)
+        {
+            try
+            {
+                if (_singleInstanceMutex.WaitOne(TimeSpan.Zero)) return true;
+            }
+            catch (AbandonedMutexException)
+            {
+                return true; // the previous Afterburn died without releasing it; we own it now
+            }
+
+            // Another Afterburn holds it. Once its window is up, show that window and step aside.
+            // While it is still starting (no window yet) or still closing, keep waiting.
+            if (TryShowOtherAfterburnWindow()) return false;
+            if (DateTime.UtcNow >= deadline) break;
+            Thread.Sleep(250);
+        }
+
+        CrashReporter.ShowMessage("Afterburn is already running, or is still closing. Close the other Afterburn window, wait a few seconds, then start it again.", "Afterburn");
+        return false;
+    }
+
+    private static bool TryShowOtherAfterburnWindow()
+    {
+        if (!OperatingSystem.IsWindows()) return false;
+        try
+        {
+            using var current = Process.GetCurrentProcess();
+            foreach (var other in Process.GetProcessesByName(current.ProcessName))
+            {
+                using (other)
+                {
+                    if (other.Id == current.Id || other.HasExited) continue;
+                    var handle = other.MainWindowHandle;
+                    if (handle == IntPtr.Zero) continue;
+                    if (IsIconic(handle)) ShowWindow(handle, 9 /* SW_RESTORE */);
+                    SetForegroundWindow(handle);
+                    return true;
+                }
+            }
+        }
+        catch { /* best effort */ }
+        return false;
+    }
+
     [STAThread]
     // Afterburn: a second Afterburn started while the first is still open or still closing used to crash on the database
     // lock. Wait for the lock to be released, then show a plain message instead of crashing.
@@ -147,8 +209,13 @@ public class Program
         catch { /* the crash log is optional */ }
 
         var startupMode = StartupMode.Parse(args);
-        try { if (startupMode.RunAsMain && startupMode.ShowUI && !WaitForDatabase()) return 0; }
-        catch { /* never block startup on this check */ }
+        if (startupMode.RunAsMain && startupMode.ShowUI)
+        {
+            try { if (!AcquireSingleInstance()) return 0; }
+            catch { /* never block startup on this check */ }
+            try { if (!WaitForDatabase()) return 0; }
+            catch { /* never block startup on this check */ }
+        }
         using var host = BuildHost(
             startupMode,
             loggingSettings,
