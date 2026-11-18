@@ -65,6 +65,40 @@ public class Program
         catch { /* not critical */ }
     }
 
+    /// <summary>
+    /// Afterburn 1.0.x still read and wrote its settings in %LOCALAPPDATA%\NexusMods.App\Configs. From 1.1 they live in
+    /// %LOCALAPPDATA%\Afterburn\Configs. On first start, copy each old settings file across (newest wins), once. The old
+    /// folder is left alone so nothing else that uses it breaks.
+    /// </summary>
+    private static void MigrateLegacyConfigs(string oldDir, string newDir)
+    {
+        try
+        {
+            var oldConfigs = System.IO.Path.Combine(oldDir, "Configs");
+            var newConfigs = System.IO.Path.Combine(newDir, "Configs");
+            var marker = System.IO.Path.Combine(newConfigs, ".migrated-from-nexusmods-app");
+            if (!System.IO.Directory.Exists(oldConfigs) || System.IO.File.Exists(marker)) return;
+
+            System.IO.Directory.CreateDirectory(newConfigs);
+            foreach (var source in System.IO.Directory.EnumerateFiles(oldConfigs, "*", System.IO.SearchOption.AllDirectories))
+            {
+                try
+                {
+                    var target = System.IO.Path.Combine(newConfigs, System.IO.Path.GetRelativePath(oldConfigs, source));
+                    var targetInfo = new System.IO.FileInfo(target);
+                    if (targetInfo.Exists && targetInfo.LastWriteTimeUtc >= System.IO.File.GetLastWriteTimeUtc(source)) continue;
+                    System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target)!);
+                    System.IO.File.Copy(source, target, overwrite: true);
+                }
+                catch { /* skip this file */ }
+            }
+
+            FixMovedPaths(newDir, oldDir);
+            System.IO.File.WriteAllText(marker, DateTime.UtcNow.ToString("O"));
+        }
+        catch { /* not critical: Afterburn starts with default settings */ }
+    }
+
     private static void MigrateLegacyDataFolder()
     {
         try
@@ -79,6 +113,8 @@ public class Program
                 System.IO.Directory.Move(oldDir, newDir);
                 FixMovedPaths(newDir, oldDir);
             }
+
+            MigrateLegacyConfigs(oldDir, newDir);
         }
         catch
         {
@@ -103,6 +139,21 @@ public class Program
     {
         _singleInstanceMutex = new Mutex(initiallyOwned: false, @"Local\Afterburn.MainProcess");
         var deadline = DateTime.UtcNow.AddSeconds(30);
+
+        // Started by "Restart now": the old copy is closing, so wait for it rather than switching to its window.
+        var restarting = Environment.GetEnvironmentVariable("AFTERBURN_RESTARTING") == "1";
+        if (restarting)
+        {
+            try { Environment.SetEnvironmentVariable("AFTERBURN_RESTARTING", null); } catch { /* ignore */ }
+            try
+            {
+                if (_singleInstanceMutex.WaitOne(TimeSpan.FromSeconds(60))) return true;
+            }
+            catch (AbandonedMutexException)
+            {
+                return true;
+            }
+        }
         while (true)
         {
             try

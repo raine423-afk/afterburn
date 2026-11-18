@@ -17,6 +17,9 @@ public interface ILoadoutLeftMenuViewModel : ILeftMenuViewModel
     public ILeftMenuItemViewModel LeftMenuItemNewCollection { get; }
 
     public ILeftMenuItemViewModel LeftMenuItemHealthCheck { get; }
+
+    /// <summary>Afterburn: the Storage page.</summary>
+    public ILeftMenuItemViewModel LeftMenuItemStorage { get; }
     
     public ILeftMenuItemViewModel? LeftMenuItemExternalChanges { get; }
 }

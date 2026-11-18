@@ -42,7 +42,9 @@ public sealed class JsonStorageBackend : IStorageBackend
         );
 
         // NOTE: OSX ".App" is apparently special, using _ instead of . to prevent weirdness
-        var baseDirectoryName = os.IsOSX ? "Afterburn/Configs" : "NexusMods.App/Configs";
+        // Afterburn: settings live with the rest of Afterburn's data. Program.MigrateLegacyConfigs copies any settings
+        // left in the old NexusMods.App/Configs folder across on first start.
+        var baseDirectoryName = "Afterburn/Configs";
         return fileSystem.GetKnownPath(baseKnownPath).Combine(baseDirectoryName);
     }
 

@@ -35,6 +35,12 @@ public class LoadoutLeftMenuDesignViewModel : AViewModel<ILoadoutLeftMenuViewMod
         Icon = IconValues.Cardiology,
     };
     
+    public ILeftMenuItemViewModel LeftMenuItemStorage { get; } = new LeftMenuItemDesignViewModel
+    {
+        Text = new StringComponent("Storage"),
+        Icon = IconValues.FolderEditOutline,
+    };
+
     public ILeftMenuItemViewModel LeftMenuItemExternalChanges { get; } = new LeftMenuItemDesignViewModel
     {
         Text = new StringComponent(Language.LoadoutLeftMenuViewModel_External_Changes),

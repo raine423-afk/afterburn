@@ -45,7 +45,15 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     /// <summary>
     /// Afterburn: largest amount of data written into one backup archive.
     /// </summary>
-    private static Size BackupChunkSize => Size.GB * 4;
+    private static Size BackupChunkSize => Size.GB * 1;
+
+    private static string FormatSize(Size size)
+    {
+        var bytes = (double)size.Value;
+        return bytes >= 1024d * 1024 * 1024
+            ? $"{bytes / (1024d * 1024 * 1024):0.0} GB"
+            : $"{bytes / (1024d * 1024):0} MB";
+    }
 
     private static IEnumerable<List<ArchivedFileEntry>> ChunkBySize(IEnumerable<ArchivedFileEntry> files, Size maxChunk)
     {
@@ -429,7 +437,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
                 diskArchived: item.HaveDisk && HaveArchive(item.Disk.Hash),
                 prevArchived: item.HavePrevious && HaveArchive(item.Previous.Hash),
                 loadoutArchived: item.Loadout.Hash != Hash.Zero && HaveArchive(item.Loadout.Hash),
-                pathIsIgnored: IsIgnoredBackupPath(path),
+                pathIsIgnored: IsIgnoredBackupPath(path) || BackupExclusions.IsExcluded(path),
                 item.SourceItemType);
 
             item.Signature = signature;
@@ -456,7 +464,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
 
                 case Actions.BackupFile:
                     job?.SetStatus("Backing up files");
-                    await ActionBackupNewFiles(loadout.InstallationInstance, loadout.InstallationId, syncTree);
+                    await ActionBackupNewFiles(loadout.InstallationInstance, loadout.InstallationId, syncTree, job);
                     break;
 
                 case Actions.IngestFromDisk:
@@ -1190,7 +1198,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     /// Backs up any new files in the loadout.
     ///
     /// </summary>
-    public virtual async Task ActionBackupNewFiles(GameInstallation installation, GameInstallMetadataId installMetadataId, Dictionary<GamePath, SyncNode> files)
+    public virtual async Task ActionBackupNewFiles(GameInstallation installation, GameInstallMetadataId installMetadataId, Dictionary<GamePath, SyncNode> files, SynchronizeLoadoutJob? job = null)
     {
         // During ingest, new files that haven't been seen before are fed into the game's synchronizer to convert a
         // DiskStateEntry (hash, size, path) into some sort of LoadoutItem. By default, these are converted into a "LoadoutFile".
@@ -1250,8 +1258,18 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
         }
 
         // PERFORMANCE: We deduplicate above with the HaveFile call.
+        // Afterburn: report progress so a long first backup doesn't look stuck.
+        var doneSize = Size.Zero;
+        var doneFiles = 0;
+        var totalFiles = archivedFiles.Count;
+        if (totalFiles > 0) job?.SetStatus($"Backing up files: 0 of {FormatSize(totalSize)}");
         foreach (var chunk in ChunkBySize(archivedFiles, BackupChunkSize))
+        {
             await _fileStore.BackupFiles(chunk, deduplicate: false);
+            doneFiles += chunk.Count;
+            foreach (var file in chunk) doneSize += file.Size;
+            job?.SetStatus($"Backing up files: {FormatSize(doneSize)} of {FormatSize(totalSize)} ({doneFiles:N0}/{totalFiles:N0} files)");
+        }
 
         // Pin the files to avoid garbage collection.
         using var tx = Connection.BeginTransaction();
