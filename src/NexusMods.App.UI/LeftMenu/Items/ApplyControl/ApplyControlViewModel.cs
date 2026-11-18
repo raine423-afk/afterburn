@@ -63,7 +63,7 @@ public class ApplyControlViewModel : AViewModel<IApplyControlViewModel>, IApplyC
         {
             var loadout = Sdk.Loadouts.Loadout.Load(_conn.Db, _loadoutId);
             var root = loadout.InstallationInstance.Locations.ToAbsolutePath(new GamePath(LocationId.Game, "")).GetFullPath();
-            if (!Directory.Exists(root)) return Disposable.Empty;
+            if (!Directory.Exists(root)) return System.Reactive.Disposables.Disposable.Empty;
 
             var watcher = new FileSystemWatcher(root)
             {
@@ -108,7 +108,7 @@ public class ApplyControlViewModel : AViewModel<IApplyControlViewModel>, IApplyC
             watcher.Renamed += (_, e) => OnChange(e.FullPath);
             watcher.EnableRaisingEvents = true;
 
-            return Disposable.Create(() =>
+            return System.Reactive.Disposables.Disposable.Create(() =>
             {
                 watcher.EnableRaisingEvents = false;
                 watcher.Dispose();
@@ -117,7 +117,7 @@ public class ApplyControlViewModel : AViewModel<IApplyControlViewModel>, IApplyC
         }
         catch
         {
-            return Disposable.Empty;
+            return System.Reactive.Disposables.Disposable.Empty;
         }
     }
 
