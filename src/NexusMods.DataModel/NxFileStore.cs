@@ -4,6 +4,7 @@ using System.Collections.Frozen;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using NexusMods.Sdk.Settings;
+using NexusMods.Archives.Nx.Enums;
 using NexusMods.Archives.Nx.FileProviders;
 using NexusMods.Archives.Nx.Headers;
 using NexusMods.Archives.Nx.Headers.Managed;
@@ -171,6 +172,27 @@ public class NxFileStore : IFileStore, IReadOnlyStreamSource
     /// <inheritdoc />
     public ValueTask<bool> HaveFile(Hash hash) => ValueTask.FromResult(_archivesByEntry.ContainsKey(hash));
 
+    private static readonly HashSet<string> CompressedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".archive", ".bk2", ".bnk", ".wem", ".opus", ".ogg", ".mp3", ".mp4", ".webm", ".mkv",
+        ".zip", ".7z", ".rar", ".gz", ".xz", ".zst", ".nx", ".png", ".jpg", ".jpeg", ".webp",
+        ".pak", ".ucas", ".cache",
+    };
+
+    private static bool IsAlreadyCompressed(NexusMods.Sdk.IO.IStreamFactory factory)
+    {
+        try
+        {
+            var name = factory.FileName.ToString();
+            var dot = name.LastIndexOf('.');
+            return dot >= 0 && CompressedExtensions.Contains(name[dot..]);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static void EnsureFreeSpace(AbsolutePath location, Size needed)
     {
         long free;
@@ -235,9 +257,14 @@ public class NxFileStore : IFileStore, IReadOnlyStreamSource
             var stream = await fileToBackup.StreamFactory.GetStreamAsync();
             filesToBackup[hash] = (fileToBackup, stream);
 
+            // Afterburn: files that are already compressed (game .archive files, audio, video, images, archives) are
+            // stored as they are. Compressing them again takes most of the backup time and saves almost nothing.
+            var alreadyCompressed = IsAlreadyCompressed(fileToBackup.StreamFactory);
             builder.AddFile(stream, new AddFileParams
             {
                 RelativePath = fileToBackup.Hash.ToHex(),
+                CompressionPreference = alreadyCompressed ? CompressionPreference.Copy : CompressionPreference.NoPreference,
+                SolidType = alreadyCompressed ? SolidPreference.NoSolid : SolidPreference.Default,
             });
         }
 

@@ -1,3 +1,5 @@
+using NexusMods.UI.Sdk.Dialog.Enums;
+using NexusMods.App.UI.Dialog;
 using System.Reactive.Linq;
 using Avalonia.Controls.Models.TreeDataGrid;
 using Avalonia.Media.Imaging;
@@ -111,6 +113,29 @@ public sealed class CollectionDownloadViewModel : APageViewModel<ICollectionDown
                         }
 
                         return;
+                    }
+
+                    // Afterburn: warn before a download that would use up the Nexus Mods API allowance part-way through.
+                    // Each mod needs about two calls (file details and a download link).
+                    var rateLimits = serviceProvider.GetRequiredService<NexusApiRateLimitTracker>();
+                    var callsNeeded = (int)RequiredDownloadsCount * 2;
+                    if (rateLimits.WouldRunOut(callsNeeded, out var callsLeft))
+                    {
+                        var warning = DialogFactory.CreateStandardDialog(
+                            "Not enough Nexus Mods API calls left",
+                            new StandardDialogParameters
+                            {
+                                Text = $"Downloading this collection needs about {callsNeeded:N0} Nexus Mods API calls, but only {callsLeft:N0} are left for now. " +
+                                       "Downloads will stop part-way and can be resumed after the limit resets (see the Rate Meter in the bottom bar).",
+                            },
+                            [
+                                DialogStandardButtons.Cancel,
+                                new DialogButtonDefinition("Download anyway", ButtonDefinitionId.Accept, ButtonAction.Accept, ButtonStyling.Primary),
+                            ],
+                            DialogWindowSize.Small
+                        );
+                        var answer = await windowManager.ShowDialog(warning, DialogWindowType.Modal);
+                        if (answer.ButtonId != ButtonDefinitionId.Accept) return;
                     }
 
                     await collectionDownloader.DownloadItems(_revision, itemType: CollectionDownloader.ItemType.Required, db: connection.Db,

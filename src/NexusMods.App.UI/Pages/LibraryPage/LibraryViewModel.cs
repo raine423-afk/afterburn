@@ -1,3 +1,4 @@
+using NexusMods.App.UI.Controls.MarkdownRenderer;
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -1074,6 +1075,53 @@ After asking design, we're choosing to simply open the mod page for now.
         }
     }
 
+    private async Task<bool> ConfirmUpdateAll((NexusModsModPageMetadataId modPageId, ModUpdatesOnModPage updates)[] pages)
+    {
+        var lines = new System.Text.StringBuilder();
+        var count = 0;
+        foreach (var (modPageId, updates) in pages)
+        {
+            var page = NexusModsModPageMetadata.Load(_connection.Db, modPageId);
+            if (!page.IsValid()) continue;
+            string url;
+            try { url = $"https://www.nexusmods.com/{page.GameDomain}/mods/{page.Uid.ModId}?tab=logs"; }
+            catch { url = string.Empty; }
+
+            foreach (var mapping in updates.FileMappings)
+            {
+                count++;
+                var from = string.IsNullOrWhiteSpace(mapping.File.Version) ? "?" : mapping.File.Version;
+                var to = string.IsNullOrWhiteSpace(mapping.NewestFile.Version) ? "?" : mapping.NewestFile.Version;
+                var name = page.Name.Replace("[", "(").Replace("]", ")");
+                lines.Append(url.Length > 0 ? $"- [{name}]({url})" : $"- {name}");
+                lines.Append($": {from} → {to}");
+                if (!string.Equals(mapping.File.Name, page.Name, StringComparison.OrdinalIgnoreCase))
+                    lines.Append($" ({mapping.File.Name})");
+                lines.AppendLine();
+            }
+        }
+
+        var markdown = _serviceProvider.GetRequiredService<IMarkdownRendererViewModel>();
+        markdown.Contents = $"""
+            **{count} mod file(s) will be updated.** Click a mod to read its changelog on Nexus Mods.
+
+            {lines}
+            To skip a mod, close this, right-click it in the Library and hide its updates.
+            """;
+
+        var dialog = DialogFactory.CreateStandardDialog(
+            "Update all mods",
+            new StandardDialogParameters { Markdown = markdown },
+            [
+                DialogStandardButtons.Cancel,
+                new DialogButtonDefinition("Update all", ButtonDefinitionId.Accept, ButtonAction.Accept, ButtonStyling.Primary),
+            ],
+            DialogWindowSize.Large
+        );
+        var result = await WindowManager.ShowDialog(dialog, DialogWindowType.Modal);
+        return result.ButtonId == ButtonDefinitionId.Accept;
+    }
+
     private async ValueTask UpdateAllItems(CancellationToken cancellationToken)
     {
         IsUpdatingAll = true;
@@ -1096,10 +1144,15 @@ After asking design, we're choosing to simply open the mod page for now.
                     var modPage = NexusModsModPageMetadata.Load(_connection.Db, pair.modPageId);
                     return modPage.IsValid() && modPage.Uid.GameId == currentGameId;
                 });
-            var allUpdates = modPagesWithUpdates.Select(pair => pair.updates).ToArray();
-            
-            if (allUpdates.Length > 0)
-                await UpdateAndReplaceForMultiModPagesPremiumOnly(cancellationToken, allUpdates);
+            var pagesWithUpdates = modPagesWithUpdates.ToArray();
+            var allUpdates = pagesWithUpdates.Select(pair => pair.updates).ToArray();
+            if (allUpdates.Length == 0) return;
+
+            // Afterburn: show what will change (with a link to each mod's changelog) before updating everything.
+            // Mods whose updates you hid are already left out.
+            if (!await ConfirmUpdateAll(pagesWithUpdates)) return;
+
+            await UpdateAndReplaceForMultiModPagesPremiumOnly(cancellationToken, allUpdates);
         }
         finally
         {
