@@ -43,6 +43,39 @@ public sealed class NexusApiRateLimitTracker
     }
 
     /// <summary>Record the result of one API call.</summary>
+    /// <summary>
+    /// Afterburn: how long to wait before the next API call so Afterburn slows down near the limit instead of hitting it.
+    /// Zero while there is plenty left (or nothing is known yet).
+    /// </summary>
+    public TimeSpan SuggestedDelay()
+    {
+        var s = Current;
+        if (!s.HasData) return TimeSpan.Zero;
+
+        var hourlyLow = s.HourlyLimit > 0 ? s.HourlyRemaining : int.MaxValue;
+        var dailyLow = s.DailyLimit > 0 ? s.DailyRemaining : int.MaxValue;
+        var left = Math.Min(hourlyLow, dailyLow);
+        if (left <= 0) return TimeSpan.Zero; // already out: the request fails fast and the user sees why
+        if (left < 25) return TimeSpan.FromSeconds(4);
+        if (left < 100) return TimeSpan.FromSeconds(1.5);
+        if (left < 250) return TimeSpan.FromMilliseconds(400);
+        return TimeSpan.Zero;
+    }
+
+    /// <summary>
+    /// Afterburn: true if about <paramref name="calls"/> more API calls would go past what's left today (or this hour).
+    /// </summary>
+    public bool WouldRunOut(int calls, out int remaining)
+    {
+        var s = Current;
+        remaining = int.MaxValue;
+        if (!s.HasData) return false;
+        var hourly = s.HourlyLimit > 0 ? s.HourlyRemaining : int.MaxValue;
+        var daily = s.DailyLimit > 0 ? s.DailyRemaining : int.MaxValue;
+        remaining = Math.Min(hourly, daily);
+        return calls > remaining;
+    }
+
     public void Report(ResponseMetadata metadata, HttpStatusCode statusCode)
     {
         NexusApiRateLimitSnapshot updated;

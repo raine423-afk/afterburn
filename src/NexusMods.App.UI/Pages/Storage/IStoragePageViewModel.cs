@@ -29,4 +29,10 @@ public interface IStoragePageViewModel : IPageViewModelInterface
     ReactiveCommand<Unit, Unit> RefreshCommand { get; }
     ReactiveCommand<Unit, Unit> CleanupCommand { get; }
     ReactiveCommand<Unit, Unit> OpenArchivesFolderCommand { get; }
+    ReactiveCommand<Unit, Unit> CollectGameLogsCommand { get; }
+    string GameLogsStatus { get; }
+    ReactiveCommand<Unit, Unit> SaveRestorePointCommand { get; }
+    ReadOnlyObservableCollection<RestorePointRow> RestorePoints { get; }
+    string RestorePointStatus { get; }
+    string MakeModStatus { get; }
 }

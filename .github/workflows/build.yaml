@@ -104,10 +104,40 @@ jobs:
           name: Afterburn-Setup
           path: installer-out/*
 
+  # Afterburn: Linux / Steam Deck build (self-contained, unpack and run ./Afterburn). It never blocks the Windows release.
+  build-linux:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '9.x'
+      - name: Publish (self-contained)
+        run: dotnet publish src/NexusMods.App/NexusMods.App.csproj -c Release -r linux-x64 --self-contained true -p:PublishReadyToRun=true -p:TieredPGO=false -p:DefineConstants=INSTALLATION_METHOD_ARCHIVE -o publish-linux -nologo "-clp:ErrorsOnly"
+      - name: Package
+        run: |
+          cp LICENSE.md NOTICE.md THIRD-PARTY-NOTICES.md README.md publish-linux/
+          if [ -f publish-linux/NexusMods.App ] && [ ! -f publish-linux/Afterburn ]; then mv publish-linux/NexusMods.App publish-linux/Afterburn; fi
+          chmod +x publish-linux/Afterburn 2>/dev/null || true
+          ver=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props | head -1)
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then ver="${GITHUB_REF_NAME#v}"; fi
+          mkdir -p linux-out
+          tar -C publish-linux -czf "linux-out/Afterburn-${ver}-linux-x64.tar.gz" .
+          (cd linux-out && sha256sum *.tar.gz > "Afterburn-${ver}-linux-x64.tar.gz.sha256")
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Afterburn-linux-x64
+          path: linux-out/*
+
   # Publishing a release is the only step that needs write access, so it runs separately and only for tags.
   release:
     if: github.ref_type == 'tag'
-    needs: build-windows
+    needs: [build-windows, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -116,12 +146,18 @@ jobs:
         with:
           name: Afterburn-Setup
           path: installer-out
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true
+        with:
+          name: Afterburn-linux-x64
+          path: installer-out
       - name: Publish the release
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           files: |
             installer-out/*.exe
+            installer-out/*.tar.gz
             installer-out/*.sha256
           body: |
-            Windows installer for Afterburn ${{ github.ref_name }}.
+            Windows installer for Afterburn ${{ github.ref_name }}, plus a Linux / Steam Deck build (unpack the .tar.gz and run ./Afterburn).
             Complete source code for this release: the "Source code" archives below, or this repository at tag ${{ github.ref_name }}. Licensed under GPL-3.0; see LICENSE.md, NOTICE.md and THIRD-PARTY-NOTICES.md.

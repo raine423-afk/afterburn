@@ -51,6 +51,76 @@ public class ApplyControlViewModel : AViewModel<IApplyControlViewModel>, IApplyC
 
     public ILaunchButtonViewModel LaunchButtonViewModel { get; }
 
+    private static readonly string[] IgnoredWatchFolders =
+    [
+        "r6/cache", "r6/logs", "red4ext/logs", "bin/x64/plugins/cyber_engine_tweaks/scripting.log",
+        "archive/pc/content", "archive/pc/ep1", "tools/redmod/bin", "engine/config/platform",
+    ];
+
+    private IDisposable StartGameFolderWatcher()
+    {
+        try
+        {
+            var loadout = Sdk.Loadouts.Loadout.Load(_conn.Db, _loadoutId);
+            var root = loadout.InstallationInstance.Locations.ToAbsolutePath(new GamePath(LocationId.Game, "")).GetFullPath();
+            if (!Directory.Exists(root)) return System.Reactive.Disposables.Disposable.Empty;
+
+            var watcher = new FileSystemWatcher(root)
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite,
+                InternalBufferSize = 64 * 1024,
+            };
+
+            var gate = new object();
+            System.Threading.Timer? pending = null;
+            var changed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            void OnChange(string fullPath)
+            {
+                if (IsApplying || IsProcessing) return;
+                var relative = Path.GetRelativePath(root, fullPath).Replace('\\', '/');
+                if (relative.EndsWith(".log", StringComparison.OrdinalIgnoreCase) || relative.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)) return;
+                foreach (var ignored in IgnoredWatchFolders)
+                    if (relative.StartsWith(ignored, StringComparison.OrdinalIgnoreCase)) return;
+
+                lock (gate)
+                {
+                    changed.Add(relative);
+                    pending?.Dispose();
+                    // Wait until the copying has stopped for a few seconds, then say it once.
+                    pending = new System.Threading.Timer(_ =>
+                    {
+                        int count;
+                        lock (gate) { count = changed.Count; changed.Clear(); }
+                        if (count == 0 || IsApplying) return;
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                            _notificationService.ShowToast(
+                                $"{count:N0} file(s) changed in the game folder. Click Apply to add them to Afterburn (they'll show up under External Changes).",
+                                ToastNotificationVariant.Neutral,
+                                TimeSpan.FromSeconds(10)));
+                    }, null, TimeSpan.FromSeconds(5), Timeout.InfiniteTimeSpan);
+                }
+            }
+
+            watcher.Created += (_, e) => OnChange(e.FullPath);
+            watcher.Changed += (_, e) => OnChange(e.FullPath);
+            watcher.Renamed += (_, e) => OnChange(e.FullPath);
+            watcher.EnableRaisingEvents = true;
+
+            return System.Reactive.Disposables.Disposable.Create(() =>
+            {
+                watcher.EnableRaisingEvents = false;
+                watcher.Dispose();
+                lock (gate) pending?.Dispose();
+            });
+        }
+        catch
+        {
+            return System.Reactive.Disposables.Disposable.Empty;
+        }
+    }
+
     public ApplyControlViewModel(LoadoutId loadoutId, IServiceProvider serviceProvider, IJobMonitor jobMonitor, IOverlayController overlayController, GameRunningTracker gameRunningTracker)
     {
         _loadoutId = loadoutId;
@@ -90,6 +160,9 @@ public class ApplyControlViewModel : AViewModel<IApplyControlViewModel>, IApplyC
 
         this.WhenActivated(disposables =>
             {
+                // Afterburn: notice mods dropped into the game folder by hand (or written by WolvenKit) straight away.
+                StartGameFolderWatcher().DisposeWith(disposables);
+
                 var isProcessingObservable = _jobMonitor.HasActiveJob<ProcessLoadoutChangesJob>(job => job.LoadoutId.Equals(loadoutId))
                     .Prepend(false);
                 

@@ -25,15 +25,46 @@
 
             <Separator Margin="0,12" />
 
+            <TextBlock Text="Restore points" FontSize="20" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding RestorePointStatus}" TextWrapping="Wrap" Opacity="0.75" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Save restore point" Command="{Binding SaveRestorePointCommand}" />
+            </StackPanel>
+            <ItemsControl ItemsSource="{Binding RestorePoints}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4">
+                            <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Details}" Opacity="0.75" />
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Restore" Command="{Binding RestoreCommand}" Margin="4,0" />
+                            <Button Grid.Column="2" Content="Delete" Command="{Binding DeleteCommand}" Margin="4,0" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Separator Margin="0,12" />
+
+            <TextBlock Text="Game crashed?" FontSize="20" FontWeight="SemiBold" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Collect game logs" Command="{Binding CollectGameLogsCommand}" />
+            </StackPanel>
+            <TextBlock Text="{Binding GameLogsStatus}" TextWrapping="Wrap" Opacity="0.75" />
+
+            <Separator Margin="0,12" />
+
             <TextBlock Text="Files Afterburn didn't install" FontSize="20" FontWeight="SemiBold" />
             <TextBlock Text="{Binding UnmanagedSummary}" TextWrapping="Wrap" />
             <TextBlock TextWrapping="Wrap" Opacity="0.75"
                        Text="If you stop backing up a folder, its files stay in your game folder and keep working, but Afterburn can't restore them if they're removed or you switch loadouts." />
 
+            <TextBlock Text="{Binding MakeModStatus}" TextWrapping="Wrap" FontWeight="SemiBold" />
             <ItemsControl ItemsSource="{Binding UnmanagedFolders}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,4">
+                        <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" Margin="0,4">
                             <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
                                 <TextBlock Text="{Binding Details}" Opacity="0.75" />
@@ -41,6 +72,7 @@
                             <TextBlock Grid.Column="1" Text="{Binding BackupStateText}" VerticalAlignment="Center" Margin="12,0" Opacity="0.75" />
                             <Button Grid.Column="2" Content="{Binding BackupButtonText}" Command="{Binding ToggleBackupCommand}" Margin="4,0" />
                             <Button Grid.Column="3" Content="Open folder" Command="{Binding OpenFolderCommand}" Margin="4,0" />
+                            <Button Grid.Column="4" Content="Turn into a mod" Command="{Binding MakeModCommand}" Margin="4,0" />
                         </Grid>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>

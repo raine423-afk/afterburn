@@ -183,6 +183,68 @@ Cyber Engine Tweaks (also known as CET) is a mod that allows other mods to hook 
 in the `bin/x64/plugins/cyber_engine_tweaks` folder, and we detect that this mod is installed by looking for `version.dll` in the game folder.                          
 """,
         },
+        // Afterburn: redscript, Input Loader and Native Settings UI are needed by many mods but weren't checked.
+        new Pattern
+        {
+            DependencyName = "redscript",
+            DependencyPaths =
+            [
+                new GamePath(LocationId.Game, "engine/tools/scc_lib.dll"),
+            ],
+            ModId = ModId.From(1511),
+            DependantSearchPatterns = [
+                new DependantSearchPattern
+                {
+                    Path = new GamePath(LocationId.Game, "r6/scripts"),
+                    Extension = new Extension(".reds"),
+                },
+            ],
+            Explanation = """
+redscript compiles script mods (`.reds` files). Without it the game silently ignores every script mod. We detect the use of redscript by looking for `.reds` files in
+the `r6/scripts` folder, and we detect that it is installed by looking for `scc_lib.dll` in `engine/tools`.
+""",
+        },
+        new Pattern
+        {
+            DependencyName = "Input Loader",
+            DependencyPaths =
+            [
+                new GamePath(LocationId.Game, "red4ext/plugins/input_loader/input_loader.dll"),
+            ],
+            ModId = ModId.From(4575),
+            DependantSearchPatterns = [
+                new DependantSearchPattern
+                {
+                    Path = new GamePath(LocationId.Game, "r6/input"),
+                    Extension = new Extension(".xml"),
+                },
+            ],
+            Explanation = """
+Input Loader lets mods add their own key bindings. We detect the use of this mod by looking for `.xml` files in the `r6/input` folder, and we detect that it is installed
+by looking for `input_loader.dll` in the `red4ext/plugins/input_loader` folder.
+""",
+        },
+        new Pattern
+        {
+            DependencyName = "Native Settings UI",
+            DependencyPaths =
+            [
+                new GamePath(LocationId.Game, "bin/x64/plugins/cyber_engine_tweaks/mods/nativeSettings/init.lua"),
+            ],
+            ModId = ModId.From(3518),
+            DependantSearchPatterns = [
+                new DependantSearchPattern
+                {
+                    Path = new GamePath(LocationId.Game, "bin/x64/plugins/cyber_engine_tweaks/mods"),
+                    Extension = new Extension(".lua"),
+                    Regex = NativeSettingsRegex(),
+                },
+            ],
+            Explanation = """
+Native Settings UI adds mod options to the game's own settings menu. We detect the use of this mod by looking for `GetMod("nativeSettings")` in CET `.lua` files, and we
+detect that it is installed by looking for its `init.lua` in the CET mods folder.
+""",
+        },
         new Pattern
         {
             DependencyName = "Appearance Change Unlocker",
@@ -214,6 +276,9 @@ detect that this mod is installed by looking for `init.lua` in the `bin/x64/plug
     [GeneratedRegex(@"\s+Codeware\s+")]
     private static partial Regex CodewareRegex();
     
+    [GeneratedRegex(@"GetMod\(\s*[""']nativeSettings[""']\s*\)")]
+    private static partial Regex NativeSettingsRegex();
+
     [GeneratedRegex("ref<VirtualShopRegistration>")]
     private static partial Regex VirtualShopRegistrationMatcher();
     

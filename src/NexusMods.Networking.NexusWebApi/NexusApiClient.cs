@@ -162,6 +162,10 @@ public class NexusApiClient : INexusApiClient
     private async Task<Response<T>> SendAsync<T>(HttpRequestMessage message, JsonTypeInfo<T> typeInfo,
         CancellationToken token = default)
     {
+        // Afterburn: pace calls when the rate limit is nearly used up.
+        var delay = _rateLimitTracker.SuggestedDelay();
+        if (delay > TimeSpan.Zero) await Task.Delay(delay, token);
+
         using var response = await _httpClient.SendAsync(message, token);
         var metadata = ParseHeaders(response);
         _rateLimitTracker.Report(metadata, response.StatusCode);
