@@ -97,6 +97,8 @@ public static class LibrarySnapshots
             var changes = AttributeChangeSignal.Observe(connection,
                 NexusModsLibraryItem.ModPageMetadata,
                 LibraryLinkedLoadoutItem.LibraryItem,
+                // Afterburn: "installed in" shows the collection, which changes when a mod is moved.
+                LoadoutItem.Parent,
                 CollectionDownloadNexusMods.FileMetadata
             );
 

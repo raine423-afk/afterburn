@@ -462,6 +462,14 @@ public class WorkspaceViewModel : AViewModel<IWorkspaceViewModel>, IWorkspaceVie
 
     private void RememberRecentPage(PanelTabId tabId, Page page)
     {
+        // Afterburn: forget the pages of tabs that have been closed, so their screens can be freed.
+        if (_recentPages.Count > 0)
+        {
+            var openTabs = _panels.SelectMany(static p => p.Tabs).Select(static t => t.Id).ToHashSet();
+            foreach (var closed in _recentPages.Keys.Where(id => !openTabs.Contains(id) && id != tabId).ToArray())
+                _recentPages.Remove(closed);
+        }
+
         if (!_recentPages.TryGetValue(tabId, out var list)) _recentPages[tabId] = list = new List<Page>(RecentPagesPerTab);
         list.RemoveAll(p => ReferenceEquals(p, page) || SamePage(p.PageData, page.PageData));
         list.Insert(0, page);

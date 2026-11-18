@@ -130,6 +130,8 @@ public static class LoadoutSnapshots
             var changes = AttributeChangeSignal.Observe(connection,
                 LibraryLinkedLoadoutItem.LibraryItem,
                 LoadoutItem.Disabled,
+                // Afterburn: moving a mod to another collection changes which list it belongs in.
+                LoadoutItem.Parent,
                 NexusModsLibraryItem.ModPageMetadata,
                 NexusCollectionItemLoadoutGroup.IsRequired
             );

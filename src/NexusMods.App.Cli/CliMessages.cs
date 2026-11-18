@@ -25,6 +25,12 @@ public static class CliMessages
     public record CollectionAddFailed(IFailureReason Reason) : IEventBusMessage;
 
     /// <summary>
+    /// Afterburn: Afterburn was started again while already running; show its window (even if it was hidden while an
+    /// apply finishes in the background).
+    /// </summary>
+    public record ShowMainWindow() : IEventBusMessage;
+
+    /// <summary>
     /// A new mod download was added to the app.
     /// </summary>
     public record ModDownloadStarted() : IEventBusMessage;

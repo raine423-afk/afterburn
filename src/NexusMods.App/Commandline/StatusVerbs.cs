@@ -14,7 +14,20 @@ public static class StatusVerbs
 {
     // ReSharper disable once UnusedMethodReturnValue.Global
     internal static IServiceCollection AddStatusVerbs(this IServiceCollection services) =>
-        services.AddVerb(() => Heartbeat);
+        services.AddVerb(() => Heartbeat)
+            .AddVerb(() => ShowWindow);
+
+    public const string ShowWindowCommand = "show-window";
+
+    /// <summary>
+    /// Afterburn: asks the running Afterburn to show its window. Used when Afterburn is started a second time.
+    /// </summary>
+    [Verb(ShowWindowCommand, "Shows the window of the running Afterburn.")]
+    private static Task<int> ShowWindow([Injected] NexusMods.Sdk.EventBus.IEventBus eventBus)
+    {
+        eventBus.Send(new NexusMods.CLI.CliMessages.ShowMainWindow());
+        return Task.FromResult(0);
+    }
 
     public const string HeartbeatCommand = "heartbeat";
     /// <summary>

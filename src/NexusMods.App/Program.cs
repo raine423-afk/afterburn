@@ -131,11 +131,14 @@ public class Program
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
 
+    private enum SingleInstanceResult { Proceed, Exit, AskRunningToShowWindow }
+
     /// <summary>
-    /// Returns true if this process should go on starting as the main process. Returns false if another Afterburn is
-    /// already running: its window is brought to the front and this copy exits quietly.
+    /// Proceed: this process should go on starting as the main process. Exit: another Afterburn is already running and
+    /// its window was brought to the front. AskRunningToShowWindow: another Afterburn is running with its window hidden
+    /// (closing after an apply), so ask it, over the local command channel, to show its window.
     /// </summary>
-    private static bool AcquireSingleInstance()
+    private static SingleInstanceResult AcquireSingleInstance()
     {
         _singleInstanceMutex = new Mutex(initiallyOwned: false, @"Local\Afterburn.MainProcess");
         var deadline = DateTime.UtcNow.AddSeconds(30);
@@ -147,32 +150,54 @@ public class Program
             try { Environment.SetEnvironmentVariable("AFTERBURN_RESTARTING", null); } catch { /* ignore */ }
             try
             {
-                if (_singleInstanceMutex.WaitOne(TimeSpan.FromSeconds(60))) return true;
+                if (_singleInstanceMutex.WaitOne(TimeSpan.FromSeconds(60))) return SingleInstanceResult.Proceed;
             }
             catch (AbandonedMutexException)
             {
-                return true;
+                return SingleInstanceResult.Proceed;
             }
         }
         while (true)
         {
             try
             {
-                if (_singleInstanceMutex.WaitOne(TimeSpan.Zero)) return true;
+                if (_singleInstanceMutex.WaitOne(TimeSpan.Zero)) return SingleInstanceResult.Proceed;
             }
             catch (AbandonedMutexException)
             {
-                return true; // the previous Afterburn died without releasing it; we own it now
+                return SingleInstanceResult.Proceed; // the previous Afterburn died without releasing it; we own it now
             }
 
             // Another Afterburn holds it. Once its window is up, show that window and step aside.
-            // While it is still starting (no window yet) or still closing, keep waiting.
-            if (TryShowOtherAfterburnWindow()) return false;
+            if (TryShowOtherAfterburnWindow()) return SingleInstanceResult.Exit;
+
+            // It has been running for a while but has no visible window: it is finishing an apply in the background
+            // (its window was closed). Ask it to show the window again. While it is still starting, keep waiting.
+            if (OtherAfterburnRunningLongerThan(TimeSpan.FromSeconds(20))) return SingleInstanceResult.AskRunningToShowWindow;
+
             if (DateTime.UtcNow >= deadline) break;
             Thread.Sleep(250);
         }
 
         CrashReporter.ShowMessage("Afterburn is already running, or is still closing. Close the other Afterburn window, wait a few seconds, then start it again.", "Afterburn");
+        return SingleInstanceResult.Exit;
+    }
+
+    private static bool OtherAfterburnRunningLongerThan(TimeSpan age)
+    {
+        try
+        {
+            using var current = Process.GetCurrentProcess();
+            foreach (var other in Process.GetProcessesByName(current.ProcessName))
+            {
+                using (other)
+                {
+                    if (other.Id == current.Id || other.HasExited) continue;
+                    if (DateTime.Now - other.StartTime > age) return true;
+                }
+            }
+        }
+        catch { /* can't tell */ }
         return false;
     }
 
@@ -307,10 +332,21 @@ public class Program
         var startupMode = StartupMode.Parse(args);
         if (startupMode.RunAsMain && startupMode.ShowUI)
         {
-            try { if (!AcquireSingleInstance()) return 0; }
+            var instance = SingleInstanceResult.Proceed;
+            try { instance = AcquireSingleInstance(); }
             catch { /* never block startup on this check */ }
-            try { if (!WaitForDatabase()) return 0; }
-            catch { /* never block startup on this check */ }
+
+            if (instance == SingleInstanceResult.Exit) return 0;
+            if (instance == SingleInstanceResult.AskRunningToShowWindow)
+            {
+                // Continue as a client of the running Afterburn and send it "show-window".
+                startupMode = StartupMode.Parse([StatusVerbs.ShowWindowCommand]);
+            }
+            else
+            {
+                try { if (!WaitForDatabase()) return 0; }
+                catch { /* never block startup on this check */ }
+            }
         }
         using var host = BuildHost(
             startupMode,
@@ -479,6 +515,14 @@ public class Program
         {
             await client.ExecuteCommand(startupMode.Args, AnsiConsole.Console);
             return 0;
+        }
+        catch (NoMainProcessStarted _) when (startupMode.Args is [StatusVerbs.ShowWindowCommand])
+        {
+            // Afterburn: only sent when another Afterburn is running. Never start a new one from here, or two copies
+            // that can't reach each other would keep starting each other.
+            _logger.LogWarning("Couldn't reach the running Afterburn to show its window");
+            CrashReporter.ShowMessage("Afterburn is already running, or is still closing. Close the other Afterburn window, wait a few seconds, then start it again.", "Afterburn");
+            return 1;
         }
         catch (NoMainProcessStarted _)
         {
