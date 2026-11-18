@@ -1,3 +1,7 @@
+using NexusMods.UI.Sdk.Dialog.Enums;
+using NexusMods.UI.Sdk.Dialog;
+using NexusMods.App.UI.Dialog.Enums;
+using NexusMods.App.UI.Dialog;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using Avalonia.Media;
@@ -36,6 +40,7 @@ public class TopBarViewModel : AViewModel<ITopBarViewModel>, ITopBarViewModel
 {
     private readonly ILoginManager _loginManager;
     private readonly IAvaloniaInterop _avaloniaInterop;
+    private readonly IWindowManager _windowManager;
     private readonly ILogger<TopBarViewModel> _logger;
     private readonly IWindowNotificationService _notificationService;
 
@@ -82,6 +87,7 @@ public class TopBarViewModel : AViewModel<ITopBarViewModel>, ITopBarViewModel
         _logger = logger;
         _loginManager = loginManager;
         _avaloniaInterop = avaloniaInterop;
+        _windowManager = windowManager;
         _notificationService = notificationService;
 
         var workspaceController = windowManager.ActiveWorkspaceController;
@@ -227,13 +233,79 @@ public class TopBarViewModel : AViewModel<ITopBarViewModel>, ITopBarViewModel
     private async Task Login()
     {
         // Afterburn: until Nexus Mods approves Afterburn, the Nexus Mods login (OAuth) is not used. Logging in works
-        // with the user's personal API key: they copy it on nexusmods.com and click the button; it is read from the
-        // clipboard, checked with Nexus Mods and saved encrypted. It takes effect when Afterburn is next started.
-        _logger.LogInformation("Logging in with a personal API key from the clipboard");
-        var text = await _avaloniaInterop.GetClipboardTextAsync();
-        var (success, message) = await ApiKeyStore.ValidateAndSaveAsync(text);
-        _logger.LogInformation("Personal API key login: {Success}", success);
-        _notificationService.ShowToast(message, success ? ToastNotificationVariant.Success : ToastNotificationVariant.Neutral, TimeSpan.FromSeconds(12));
+        // with the user's personal API key. It used to be read silently from the clipboard, so a wrong clipboard just
+        // showed a toast that was easy to miss. Now a dialog asks for the key (filled in from the clipboard when it
+        // looks like one), says clearly what went wrong, and offers to restart Afterburn so the login takes effect.
+        _logger.LogInformation("Logging in with a personal API key");
+        string? clipboard = null;
+        try { clipboard = await _avaloniaInterop.GetClipboardTextAsync(); } catch { /* ignore */ }
+        var prefill = clipboard is { Length: >= 20 and <= 400 } c && !c.Trim().Contains(' ') ? c.Trim() : string.Empty;
+
+        var message = "Paste your Personal API Key from nexusmods.com/users/myaccount?tab=api (scroll to the bottom, \"Personal API Key\").";
+        while (true)
+        {
+            var dialog = DialogFactory.CreateStandardDialog(
+                "Log in to Nexus Mods",
+                new StandardDialogParameters
+                {
+                    Text = message,
+                    InputLabel = "Personal API Key",
+                    InputWatermark = "Paste your key here",
+                    InputText = prefill,
+                },
+                [
+                    DialogStandardButtons.Cancel,
+                    new DialogButtonDefinition("Log in", ButtonDefinitionId.Accept, ButtonAction.Accept, ButtonStyling.Primary),
+                ],
+                DialogWindowSize.Medium
+            );
+
+            var result = await _windowManager.ShowDialog(dialog, DialogWindowType.Modal);
+            if (result.ButtonId != ButtonDefinitionId.Accept) return;
+
+            var (success, resultMessage) = await ApiKeyStore.ValidateAndSaveAsync(result.InputText);
+            _logger.LogInformation("Personal API key login: {Success} ({Message})", success, resultMessage);
+            if (!success)
+            {
+                // Show the problem in the same dialog and let them try again.
+                message = resultMessage;
+                prefill = result.InputText;
+                continue;
+            }
+
+            var restart = new DialogButtonDefinition("Restart now", ButtonDefinitionId.Accept, ButtonAction.Accept, ButtonStyling.Primary);
+            var done = await _windowManager.ShowDialog(DialogFactory.CreateStandardDialog(
+                "Key saved",
+                new StandardDialogParameters { Text = "Your key works and has been saved. Afterburn needs to restart to finish logging in." },
+                [ new DialogButtonDefinition("Later", ButtonDefinitionId.Cancel, ButtonAction.Reject), restart ],
+                DialogWindowSize.Small
+            ), DialogWindowType.Modal);
+
+            if (done.ButtonId == ButtonDefinitionId.Accept) RestartAfterburn();
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Starts a new Afterburn and closes this one. The new copy waits for this one to finish closing.
+    /// </summary>
+    private void RestartAfterburn()
+    {
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(exe)) return;
+            var start = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false };
+            start.Environment["AFTERBURN_RESTARTING"] = "1";
+            System.Diagnostics.Process.Start(start);
+            if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                desktop.Shutdown();
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Couldn't restart Afterburn");
+            _notificationService.ShowToast("Couldn't restart automatically. Close Afterburn and open it again to finish logging in.", ToastNotificationVariant.Neutral, TimeSpan.FromSeconds(12));
+        }
     }
 
     private async Task Logout()

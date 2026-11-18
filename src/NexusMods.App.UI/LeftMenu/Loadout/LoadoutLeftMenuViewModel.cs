@@ -1,3 +1,4 @@
+using NexusMods.App.UI.Pages.Storage;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Reactive.Disposables;
@@ -45,6 +46,7 @@ public class LoadoutLeftMenuViewModel : AViewModel<ILoadoutLeftMenuViewModel>, I
     public ILeftMenuItemViewModel LeftMenuItemLoadout { get; }
     public ILeftMenuItemViewModel LeftMenuItemNewCollection { get; }
     public ILeftMenuItemViewModel LeftMenuItemHealthCheck { get; }
+    public ILeftMenuItemViewModel LeftMenuItemStorage { get; }
     [Reactive] public ILeftMenuItemViewModel? LeftMenuItemExternalChanges { get; private set; }
     
     [Reactive] public bool HasSingleCollection { get; private set; } = true;
@@ -230,6 +232,25 @@ public class LoadoutLeftMenuViewModel : AViewModel<ILoadoutLeftMenuViewModel>, I
             ToolTip = new StringComponent(Language.LoadoutLeftMenuViewModel_Diagnostics_ToolTip),
         };
         
+        // Afterburn: Storage (disk usage, clean-up, files Afterburn didn't install)
+        LeftMenuItemStorage = new LeftMenuItemViewModel(
+            workspaceController,
+            WorkspaceId,
+            new PageData
+            {
+                FactoryId = StoragePageFactory.StaticId,
+                Context = new StoragePageContext
+                {
+                    LoadoutId = loadoutContext.LoadoutId,
+                },
+            }
+        )
+        {
+            Text = new StringComponent("Storage"),
+            Icon = IconValues.FolderEditOutline,
+            ToolTip = new StringComponent("How much disk space Afterburn uses, clean-up, and game-folder files Afterburn didn't install"),
+        };
+
         // Apply Control
         ApplyControlViewModel = new ApplyControlViewModel(loadoutContext.LoadoutId,
             serviceProvider,

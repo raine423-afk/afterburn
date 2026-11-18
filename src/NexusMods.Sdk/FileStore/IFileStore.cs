@@ -11,6 +11,11 @@ namespace NexusMods.Sdk.FileStore;
 public interface IFileStore
 {
     /// <summary>
+    /// Afterburn: the folders the backup and download archives are kept in (for the Storage page).
+    /// </summary>
+    IReadOnlyList<AbsolutePath> ArchiveLocations => [];
+
+    /// <summary>
     /// Returns true if there is an archive that has the specified file.
     /// </summary>
     /// <param name="hash"></param>

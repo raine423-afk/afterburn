@@ -166,6 +166,9 @@ public class NxFileStore : IFileStore, IReadOnlyStreamSource
     }
 
     /// <inheritdoc />
+    public IReadOnlyList<AbsolutePath> ArchiveLocations => _archiveLocations;
+
+    /// <inheritdoc />
     public ValueTask<bool> HaveFile(Hash hash) => ValueTask.FromResult(_archivesByEntry.ContainsKey(hash));
 
     private static void EnsureFreeSpace(AbsolutePath location, Size needed)

@@ -65,6 +65,40 @@ public class Program
         catch { /* not critical */ }
     }
 
+    /// <summary>
+    /// Afterburn 1.0.x still read and wrote its settings in %LOCALAPPDATA%\NexusMods.App\Configs. From 1.1 they live in
+    /// %LOCALAPPDATA%\Afterburn\Configs. On first start, copy each old settings file across (newest wins), once. The old
+    /// folder is left alone so nothing else that uses it breaks.
+    /// </summary>
+    private static void MigrateLegacyConfigs(string oldDir, string newDir)
+    {
+        try
+        {
+            var oldConfigs = System.IO.Path.Combine(oldDir, "Configs");
+            var newConfigs = System.IO.Path.Combine(newDir, "Configs");
+            var marker = System.IO.Path.Combine(newConfigs, ".migrated-from-nexusmods-app");
+            if (!System.IO.Directory.Exists(oldConfigs) || System.IO.File.Exists(marker)) return;
+
+            System.IO.Directory.CreateDirectory(newConfigs);
+            foreach (var source in System.IO.Directory.EnumerateFiles(oldConfigs, "*", System.IO.SearchOption.AllDirectories))
+            {
+                try
+                {
+                    var target = System.IO.Path.Combine(newConfigs, System.IO.Path.GetRelativePath(oldConfigs, source));
+                    var targetInfo = new System.IO.FileInfo(target);
+                    if (targetInfo.Exists && targetInfo.LastWriteTimeUtc >= System.IO.File.GetLastWriteTimeUtc(source)) continue;
+                    System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target)!);
+                    System.IO.File.Copy(source, target, overwrite: true);
+                }
+                catch { /* skip this file */ }
+            }
+
+            FixMovedPaths(newDir, oldDir);
+            System.IO.File.WriteAllText(marker, DateTime.UtcNow.ToString("O"));
+        }
+        catch { /* not critical: Afterburn starts with default settings */ }
+    }
+
     private static void MigrateLegacyDataFolder()
     {
         try
@@ -79,11 +113,90 @@ public class Program
                 System.IO.Directory.Move(oldDir, newDir);
                 FixMovedPaths(newDir, oldDir);
             }
+
+            MigrateLegacyConfigs(oldDir, newDir);
         }
         catch
         {
             // Not critical: Afterburn simply starts with a fresh data folder.
         }
+    }
+
+    // Afterburn: held for the whole life of the main (UI) process, so only one can run at a time. The old LOCK-file check
+    // below raced when two copies started within a second of each other (e.g. a double launch): both passed it, and the
+    // second then crashed opening the database.
+    private static Mutex? _singleInstanceMutex;
+
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
+
+    /// <summary>
+    /// Returns true if this process should go on starting as the main process. Returns false if another Afterburn is
+    /// already running: its window is brought to the front and this copy exits quietly.
+    /// </summary>
+    private static bool AcquireSingleInstance()
+    {
+        _singleInstanceMutex = new Mutex(initiallyOwned: false, @"Local\Afterburn.MainProcess");
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+
+        // Started by "Restart now": the old copy is closing, so wait for it rather than switching to its window.
+        var restarting = Environment.GetEnvironmentVariable("AFTERBURN_RESTARTING") == "1";
+        if (restarting)
+        {
+            try { Environment.SetEnvironmentVariable("AFTERBURN_RESTARTING", null); } catch { /* ignore */ }
+            try
+            {
+                if (_singleInstanceMutex.WaitOne(TimeSpan.FromSeconds(60))) return true;
+            }
+            catch (AbandonedMutexException)
+            {
+                return true;
+            }
+        }
+        while (true)
+        {
+            try
+            {
+                if (_singleInstanceMutex.WaitOne(TimeSpan.Zero)) return true;
+            }
+            catch (AbandonedMutexException)
+            {
+                return true; // the previous Afterburn died without releasing it; we own it now
+            }
+
+            // Another Afterburn holds it. Once its window is up, show that window and step aside.
+            // While it is still starting (no window yet) or still closing, keep waiting.
+            if (TryShowOtherAfterburnWindow()) return false;
+            if (DateTime.UtcNow >= deadline) break;
+            Thread.Sleep(250);
+        }
+
+        CrashReporter.ShowMessage("Afterburn is already running, or is still closing. Close the other Afterburn window, wait a few seconds, then start it again.", "Afterburn");
+        return false;
+    }
+
+    private static bool TryShowOtherAfterburnWindow()
+    {
+        if (!OperatingSystem.IsWindows()) return false;
+        try
+        {
+            using var current = Process.GetCurrentProcess();
+            foreach (var other in Process.GetProcessesByName(current.ProcessName))
+            {
+                using (other)
+                {
+                    if (other.Id == current.Id || other.HasExited) continue;
+                    var handle = other.MainWindowHandle;
+                    if (handle == IntPtr.Zero) continue;
+                    if (IsIconic(handle)) ShowWindow(handle, 9 /* SW_RESTORE */);
+                    SetForegroundWindow(handle);
+                    return true;
+                }
+            }
+        }
+        catch { /* best effort */ }
+        return false;
     }
 
     [STAThread]
@@ -111,6 +224,51 @@ public class Program
 
         CrashReporter.ShowMessage("Afterburn is already running, or is still closing. Close the other Afterburn window, wait a few seconds, then start it again.", "Afterburn");
         return false;
+    }
+
+    private static readonly Stopwatch StartupClock = Stopwatch.StartNew();
+
+    internal static void LogStartupStep(string step)
+    {
+        try { _logger?.LogInformation("Startup: {Step} after {Ms} ms", step, StartupClock.ElapsedMilliseconds); } catch { /* ignore */ }
+    }
+
+    /// <summary>
+    /// Afterburn: while the main thread opens the database and starts services, read the UI's libraries from disk and
+    /// set up ReactiveUI on a background thread. On a slow or cold drive this overlaps a lot of waiting that used to
+    /// happen one step after another.
+    /// </summary>
+    private static void StartBackgroundWarmup()
+    {
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var queue = new Queue<Assembly>();
+                queue.Enqueue(typeof(NexusMods.App.UI.Windows.MainWindow).Assembly);
+                queue.Enqueue(typeof(Program).Assembly);
+                while (queue.Count > 0)
+                {
+                    var assembly = queue.Dequeue();
+                    foreach (var reference in assembly.GetReferencedAssemblies())
+                    {
+                        if (reference.Name is null || !seen.Add(reference.Name)) continue;
+                        try { queue.Enqueue(Assembly.Load(reference)); }
+                        catch { /* optional */ }
+                    }
+                }
+
+                System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(RxApp).TypeHandle);
+            }
+            catch { /* warm-up is optional */ }
+        })
+        {
+            IsBackground = true,
+            Name = "Afterburn startup warm-up",
+            Priority = ThreadPriority.BelowNormal,
+        };
+        thread.Start();
     }
 
     public static int Main(string[] args)
@@ -147,8 +305,13 @@ public class Program
         catch { /* the crash log is optional */ }
 
         var startupMode = StartupMode.Parse(args);
-        try { if (startupMode.RunAsMain && startupMode.ShowUI && !WaitForDatabase()) return 0; }
-        catch { /* never block startup on this check */ }
+        if (startupMode.RunAsMain && startupMode.ShowUI)
+        {
+            try { if (!AcquireSingleInstance()) return 0; }
+            catch { /* never block startup on this check */ }
+            try { if (!WaitForDatabase()) return 0; }
+            catch { /* never block startup on this check */ }
+        }
         using var host = BuildHost(
             startupMode,
             loggingSettings,
@@ -158,12 +321,15 @@ public class Program
 
         var services = host.Services;
         _logger = services.GetRequiredService<ILogger<Program>>();
+        LogStartupStep("services built");
+        if (startupMode.RunAsMain && startupMode.ShowUI) StartBackgroundWarmup();
 
         // NOTE(erri120): has to come before host startup
         CleanupUnresponsiveProcesses(services).Wait(timeout: TimeSpan.FromSeconds(10));
 
         // Okay to do wait here, as we are in the main process thread.
         host.StartAsync().Wait(timeout: TimeSpan.FromMinutes(5));
+        LogStartupStep("background services started");
 
         if (startupMode.RunAsMain)
         {
@@ -200,6 +366,7 @@ public class Program
                 // Otherwise, perform the initial setup
                 migration.InitialSetup().Wait();
             }
+            LogStartupStep("database ready");
         }
 
 
@@ -218,6 +385,7 @@ public class Program
         {
             LogMessages.UnobservedReactiveThrownException(_logger, ex);
         });
+        LogStartupStep("ReactiveUI ready");
 
 
         try

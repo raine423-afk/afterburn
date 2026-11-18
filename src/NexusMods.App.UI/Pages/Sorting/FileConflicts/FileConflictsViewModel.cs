@@ -41,6 +41,7 @@ public class FileConflictsViewModel : AViewModel<IFileConflictsViewModel>, IFile
     public IReadOnlyBindableReactiveProperty<bool> IsAscending { get; }
 
     public R3.ReactiveCommand SwitchSortDirectionCommand { get; }
+    public R3.ReactiveCommand AutoResolveCommand { get; }
 
     public FileConflictsViewModel(IServiceProvider serviceProvider, IWindowManager windowManager, LoadoutId loadoutId)
     {
@@ -63,6 +64,14 @@ public class FileConflictsViewModel : AViewModel<IFileConflictsViewModel>, IFile
             _sortDirectionCurrent.Value = newDirection;
         });
         
+        // Afterburn: the automatic rules normally run after each install. This runs them again for the whole loadout,
+        // e.g. for mods installed before the rules existed. Only conflicting mods move; everything else keeps its place.
+        AutoResolveCommand = new R3.ReactiveCommand(unit =>
+        {
+            var task = _loadoutManager.AutoResolveFileConflicts(loadoutId).AsTask();
+            task.ContinueWith(static t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
+        });
+
         TreeDataGridAdapter = new FileConflictsTreeDataGridAdapter(serviceProvider, connection, synchronizer, SortDirectionCurrent.AsObservable(), loadoutId);
 
         this.WhenActivated(disposables =>
