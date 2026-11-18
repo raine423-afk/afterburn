@@ -85,7 +85,17 @@ internal static class CleanupVerbs
 
                 // Local Application Data (where all app files default to).
                 DataModelSettings.GetLocalApplicationDataDirectory(fileSystem),
+
+                // Afterburn: the saved Nexus Mods API key, so no secret is left behind after uninstalling.
+                fileSystem.FromUnsanitizedFullPath(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AfterburnData")),
             }.Concat(dataModelSettings.ArchiveLocations.Select(path => path.ToPath(fileSystem)));
+
+            // Afterburn: these folders can be changed in Settings. Never delete a drive, the user's home or any of
+            // its standard folders (Documents, Downloads, AppData…), only folders that are plainly Afterburn's own.
+            var allDirectories = appDirectories.ToArray();
+            appDirectories = allDirectories.Where(dir => IsSafeToDeleteRecursively(dir.ToString())).ToArray();
+            foreach (var skipped in allDirectories.Where(dir => !IsSafeToDeleteRecursively(dir.ToString())))
+                await renderer.Text($"Skipping `{skipped}`: it isn't an Afterburn-only folder, so it was left alone.");
 
             if (fileSystem.OS.IsUnix())
                 await DeleteRemainingFilesUnix(renderer, appFiles, appDirectories);
@@ -103,6 +113,50 @@ internal static class CleanupVerbs
         finally
         {
             Environment.Exit(0);
+        }
+    }
+
+    internal static bool IsSafeToDeleteRecursively(string path)
+    {
+        try
+        {
+            var full = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (string.IsNullOrEmpty(full)) return false;
+
+            // A drive or filesystem root.
+            var root = Path.GetPathRoot(full)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) ?? string.Empty;
+            if (string.Equals(full, root, StringComparison.OrdinalIgnoreCase)) return false;
+
+            // The user's home, standard folders, and anything above them.
+            var protectedFolders = new[]
+            {
+                Environment.SpecialFolder.UserProfile, Environment.SpecialFolder.Desktop, Environment.SpecialFolder.MyDocuments,
+                Environment.SpecialFolder.MyPictures, Environment.SpecialFolder.MyMusic, Environment.SpecialFolder.MyVideos,
+                Environment.SpecialFolder.ApplicationData, Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolder.CommonApplicationData,
+                Environment.SpecialFolder.ProgramFiles, Environment.SpecialFolder.ProgramFilesX86, Environment.SpecialFolder.Windows,
+                Environment.SpecialFolder.System,
+            }
+            .Select(Environment.GetFolderPath)
+            .Append(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"))
+            .Append(Path.GetTempPath())
+            .Where(static f => !string.IsNullOrEmpty(f))
+            .Select(static f => Path.GetFullPath(f).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+
+            foreach (var folder in protectedFolders)
+            {
+                if (string.Equals(full, folder, StringComparison.OrdinalIgnoreCase)) return false;
+                if (folder.StartsWith(full + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return false;
+            }
+
+            // Only folders that are, or sit inside, an Afterburn (or old NexusMods.App) folder.
+            var parts = full.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return parts.Any(static part => part.Contains("Afterburn", StringComparison.OrdinalIgnoreCase)
+                                            || part.Equals("NexusMods.App", StringComparison.OrdinalIgnoreCase)
+                                            || part.Equals("NexusMods_App", StringComparison.OrdinalIgnoreCase));
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -125,7 +179,7 @@ internal static class CleanupVerbs
 
         // Execute the PowerShell script
         // Pass arguments as separate items so paths containing quotes or apostrophes can't change the command.
-        await Cli.Wrap("powershell")
+        await Cli.Wrap(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe"))
             .WithArguments(args => args
                 .Add("-NoProfile")
                 .Add("-ExecutionPolicy").Add("Bypass")

@@ -91,6 +91,15 @@ public readonly struct GamePath : IPath<GamePath>, IEquatable<GamePath>, ICompar
         foreach (var segment in s.Split('/', '\\'))
         {
             if (segment == "..") throw new InvalidOperationException($"Refusing game path that leaves the game folder: `{s}`");
+
+            // Windows drops trailing dots and spaces from each part of a path, so ".. ", "..." or ". ." would turn
+            // into ".." when the file is written. Refuse any part made only of dots and spaces (except ".").
+            if (segment.Length >= 2 && segment.AsSpan().TrimEnd(" .").IsEmpty)
+                throw new InvalidOperationException($"Refusing game path that leaves the game folder: `{s}`");
+
+            // A ':' would write to a hidden NTFS data stream of another file (or name a drive).
+            if (segment.Contains(':'))
+                throw new InvalidOperationException($"Refusing game path with ':' in it: `{s}`");
         }
         return path;
     }

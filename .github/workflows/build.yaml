@@ -119,6 +119,23 @@ jobs:
           dotnet-version: '9.x'
       - name: Publish (self-contained)
         run: dotnet publish src/NexusMods.App/NexusMods.App.csproj -c Release -r linux-x64 --self-contained true -p:PublishReadyToRun=true -p:TieredPGO=false -p:DefineConstants=INSTALLATION_METHOD_ARCHIVE -o publish-linux -nologo "-clp:ErrorsOnly"
+      - name: Use the current official 7-Zip for Linux
+        # The 7zz in the repository is 21.03 (2021), which has known security bugs (CVE-2024-11477, CVE-2025-55188).
+        # Replace it with the pinned official 7-Zip release from github.com/ip7z/7zip.
+        env:
+          SEVENZIP_VERSION: '26.06'
+        run: |
+          set -euo pipefail
+          short="${SEVENZIP_VERSION//./}"
+          curl -fsSL --proto '=https' --tlsv1.2 -o 7z.tar.xz "https://github.com/ip7z/7zip/releases/download/${SEVENZIP_VERSION}/7z${short}-linux-x64.tar.xz"
+          mkdir -p 7z-new && tar -xJf 7z.tar.xz -C 7z-new 7zz
+          ./7z-new/7zz > 7z-info.txt || true
+          head -3 7z-info.txt | tee -a "$GITHUB_STEP_SUMMARY"
+          grep -q "7-Zip (z) ${SEVENZIP_VERSION}" 7z-info.txt || { echo "::error::unexpected 7-Zip version"; exit 1; }
+          sha256sum 7z.tar.xz 7z-new/7zz | tee -a "$GITHUB_STEP_SUMMARY"
+          found=0
+          while IFS= read -r target; do cp 7z-new/7zz "$target"; chmod +x "$target"; found=1; done < <(find publish-linux -name 7zz -type f)
+          if [ "$found" = 0 ]; then echo "::error::7zz not found in the Linux build"; exit 1; fi
       - name: Package
         run: |
           cp LICENSE.md NOTICE.md THIRD-PARTY-NOTICES.md README.md publish-linux/

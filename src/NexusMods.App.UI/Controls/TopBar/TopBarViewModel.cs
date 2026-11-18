@@ -239,7 +239,12 @@ public class TopBarViewModel : AViewModel<ITopBarViewModel>, ITopBarViewModel
         _logger.LogInformation("Logging in with a personal API key");
         string? clipboard = null;
         try { clipboard = await _avaloniaInterop.GetClipboardTextAsync(); } catch { /* ignore */ }
-        var prefill = clipboard is { Length: >= 20 and <= 400 } c && !c.Trim().Contains(' ') ? c.Trim() : string.Empty;
+        // Only pre-fill something that looks like an API key, so other things on the clipboard (passwords, links)
+        // are never shown in the dialog.
+        var trimmed = clipboard?.Trim() ?? string.Empty;
+        var prefill = trimmed.Length is >= 20 and <= 400 && trimmed.All(static ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '=' or '+' or '/' or '.')
+            ? trimmed
+            : string.Empty;
 
         var message = "Paste your Personal API Key from nexusmods.com/users/myaccount?tab=api (scroll to the bottom, \"Personal API Key\").";
         while (true)

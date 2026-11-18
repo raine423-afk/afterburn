@@ -57,6 +57,18 @@ public class ApplyControlViewModel : AViewModel<IApplyControlViewModel>, IApplyC
         "archive/pc/content", "archive/pc/ep1", "tools/redmod/bin", "engine/config/platform",
     ];
 
+    // Afterburn: when Afterburn or the game last touched the game folder (Environment.TickCount64), so the watcher
+    // doesn't report Afterburn's own Apply or files the game and its mods write while playing.
+    private long _lastBusyTicks = Environment.TickCount64;
+    private volatile bool _gameRunning;
+    private static readonly TimeSpan QuietAfterBusy = TimeSpan.FromSeconds(20);
+
+    private void MarkBusy() => Interlocked.Exchange(ref _lastBusyTicks, Environment.TickCount64);
+
+    private bool IsBusyOrJustFinished() =>
+        IsApplying || IsProcessing || _gameRunning
+        || Environment.TickCount64 - Interlocked.Read(ref _lastBusyTicks) < (long)QuietAfterBusy.TotalMilliseconds;
+
     private IDisposable StartGameFolderWatcher()
     {
         try
@@ -68,7 +80,7 @@ public class ApplyControlViewModel : AViewModel<IApplyControlViewModel>, IApplyC
             var watcher = new FileSystemWatcher(root)
             {
                 IncludeSubdirectories = true,
-                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite,
+                NotifyFilter = NotifyFilters.FileName,
                 InternalBufferSize = 64 * 1024,
             };
 
@@ -78,9 +90,11 @@ public class ApplyControlViewModel : AViewModel<IApplyControlViewModel>, IApplyC
 
             void OnChange(string fullPath)
             {
-                if (IsApplying || IsProcessing) return;
+                if (IsBusyOrJustFinished()) return;
                 var relative = Path.GetRelativePath(root, fullPath).Replace('\\', '/');
-                if (relative.EndsWith(".log", StringComparison.OrdinalIgnoreCase) || relative.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)) return;
+                if (relative.EndsWith(".log", StringComparison.OrdinalIgnoreCase) || relative.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)
+                    || relative.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase) || relative.EndsWith("-journal", StringComparison.OrdinalIgnoreCase)
+                    || relative.EndsWith(".bak", StringComparison.OrdinalIgnoreCase)) return;
                 foreach (var ignored in IgnoredWatchFolders)
                     if (relative.StartsWith(ignored, StringComparison.OrdinalIgnoreCase)) return;
 
@@ -93,7 +107,7 @@ public class ApplyControlViewModel : AViewModel<IApplyControlViewModel>, IApplyC
                     {
                         int count;
                         lock (gate) { count = changed.Count; changed.Clear(); }
-                        if (count == 0 || IsApplying) return;
+                        if (count == 0 || IsBusyOrJustFinished()) return;
                         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                             _notificationService.ShowToast(
                                 $"{count:N0} file(s) changed in the game folder. Click Apply to add them to Afterburn (they'll show up under External Changes).",
@@ -103,9 +117,10 @@ public class ApplyControlViewModel : AViewModel<IApplyControlViewModel>, IApplyC
                 }
             }
 
-            watcher.Created += (_, e) => OnChange(e.FullPath);
-            watcher.Changed += (_, e) => OnChange(e.FullPath);
-            watcher.Renamed += (_, e) => OnChange(e.FullPath);
+            // New and renamed files only: mods rewrite their own settings/data files all the time, which isn't news.
+            watcher.Created += (_, e) => { if (!Directory.Exists(e.FullPath)) OnChange(e.FullPath); };
+            watcher.Renamed += (_, e) => { if (!Directory.Exists(e.FullPath)) OnChange(e.FullPath); };
+            watcher.Error += (_, _) => { lock (gate) changed.Clear(); };
             watcher.EnableRaisingEvents = true;
 
             return System.Reactive.Disposables.Disposable.Create(() =>
@@ -193,6 +208,8 @@ public class ApplyControlViewModel : AViewModel<IApplyControlViewModel>, IApplyC
                     {
                         var (ldStatus, isProcessing,  gameStatus, running, isUnmanaging) = status;
                         IsProcessing = isProcessing;
+                        _gameRunning = running;
+                        if (isProcessing || running || gameStatus == GameSynchronizerState.Busy) MarkBusy();
                         CanApply = !isProcessing
                                    && !running
                                    && gameStatus != GameSynchronizerState.Busy
@@ -211,7 +228,7 @@ public class ApplyControlViewModel : AViewModel<IApplyControlViewModel>, IApplyC
                 _jobMonitor.HasActiveJob<SynchronizeLoadoutJob>(job => job.LoadoutId == loadoutId)
                     .Prepend(_jobMonitor.Jobs.Any(job => job.Definition is SynchronizeLoadoutJob sJob && sJob.LoadoutId == loadoutId))
                     .OnUI()
-                    .Subscribe(isApplying => IsApplying = isApplying)
+                    .Subscribe(isApplying => { IsApplying = isApplying; MarkBusy(); })
                     .DisposeWith(disposables);
                 
                 _jobMonitor.ObserveActiveJobs<SynchronizeLoadoutJob>()

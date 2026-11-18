@@ -50,30 +50,46 @@ public static class BackupExclusions
         lock (Gate) return Entries.Contains(key);
     }
 
+    // Parsed copy of the entries for the hot path (checked for every file on every Apply): no lock, no allocations
+    // when nothing is excluded.
+    private static volatile (string Location, string Folder)[]? _snapshot;
+
+    private static (string Location, string Folder)[] Snapshot()
+    {
+        var snap = _snapshot;
+        if (snap is not null) return snap;
+        lock (Gate)
+        {
+            snap = Entries.Select(static e =>
+            {
+                var bar = e.IndexOf('|');
+                return bar < 0 ? (e, string.Empty) : (e[..bar], e[(bar + 1)..]);
+            }).ToArray();
+            _snapshot = snap;
+            return snap;
+        }
+    }
+
     /// <summary>True if the path is inside any excluded folder.</summary>
     public static bool IsExcluded(GamePath path)
     {
-        lock (Gate)
-        {
-            var entries = Entries;
-            if (entries.Count == 0) return false;
+        var snap = Snapshot();
+        if (snap.Length == 0) return false;
 
-            var p = path.Path.ToString().Replace('\\', '/').ToLowerInvariant();
-            var prefix = $"{path.LocationId}|";
-            foreach (var entry in entries)
+        var location = path.LocationId.ToString();
+        var p = path.Path.ToString().Replace('\\', '/');
+        foreach (var (entryLocation, folder) in snap)
+        {
+            if (!string.Equals(entryLocation, location, StringComparison.Ordinal)) continue;
+            if (folder.Length == 0)
             {
-                if (!entry.StartsWith(prefix, StringComparison.Ordinal)) continue;
-                var folder = entry[prefix.Length..];
-                if (folder.Length == 0)
-                {
-                    // "" means files directly in the location's root folder, not everything under it.
-                    if (!p.Contains('/')) return true;
-                    continue;
-                }
-                if (p.StartsWith(folder + "/", StringComparison.Ordinal)) return true;
+                // "" means files directly in the location's root folder, not everything under it.
+                if (!p.Contains('/')) return true;
+                continue;
             }
-            return false;
+            if (p.Length > folder.Length && p[folder.Length] == '/' && p.StartsWith(folder, StringComparison.OrdinalIgnoreCase)) return true;
         }
+        return false;
     }
 
     /// <summary>Turns backups for a folder off (excluded = true) or back on.</summary>
@@ -85,6 +101,7 @@ public static class BackupExclusions
             var key = KeyFor(location, folder);
             var changed = excluded ? entries.Add(key) : entries.Remove(key);
             if (!changed) return;
+            _snapshot = null;
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
