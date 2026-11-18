@@ -60,7 +60,9 @@ public class Startup
     private static void AppMain(Application app, string[] args)
     {
         _logger.LogInformation("Starting UI application");
+        Program.LogStartupStep("UI framework ready");
         ShowMainWindow();
+        Program.LogStartupStep("main window shown");
 
         // Start the app, linking to the global shutdown token
         _logger.LogInformation("Starting application loop");

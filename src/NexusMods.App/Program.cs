@@ -226,6 +226,51 @@ public class Program
         return false;
     }
 
+    private static readonly Stopwatch StartupClock = Stopwatch.StartNew();
+
+    internal static void LogStartupStep(string step)
+    {
+        try { _logger?.LogInformation("Startup: {Step} after {Ms} ms", step, StartupClock.ElapsedMilliseconds); } catch { /* ignore */ }
+    }
+
+    /// <summary>
+    /// Afterburn: while the main thread opens the database and starts services, read the UI's libraries from disk and
+    /// set up ReactiveUI on a background thread. On a slow or cold drive this overlaps a lot of waiting that used to
+    /// happen one step after another.
+    /// </summary>
+    private static void StartBackgroundWarmup()
+    {
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var queue = new Queue<Assembly>();
+                queue.Enqueue(typeof(NexusMods.App.UI.Windows.MainWindow).Assembly);
+                queue.Enqueue(typeof(Program).Assembly);
+                while (queue.Count > 0)
+                {
+                    var assembly = queue.Dequeue();
+                    foreach (var reference in assembly.GetReferencedAssemblies())
+                    {
+                        if (reference.Name is null || !seen.Add(reference.Name)) continue;
+                        try { queue.Enqueue(Assembly.Load(reference)); }
+                        catch { /* optional */ }
+                    }
+                }
+
+                System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(RxApp).TypeHandle);
+            }
+            catch { /* warm-up is optional */ }
+        })
+        {
+            IsBackground = true,
+            Name = "Afterburn startup warm-up",
+            Priority = ThreadPriority.BelowNormal,
+        };
+        thread.Start();
+    }
+
     public static int Main(string[] args)
     {
         // This code will not work properly if it comes after anything that uses the console. So we need to do this first.
@@ -276,12 +321,15 @@ public class Program
 
         var services = host.Services;
         _logger = services.GetRequiredService<ILogger<Program>>();
+        LogStartupStep("services built");
+        if (startupMode.RunAsMain && startupMode.ShowUI) StartBackgroundWarmup();
 
         // NOTE(erri120): has to come before host startup
         CleanupUnresponsiveProcesses(services).Wait(timeout: TimeSpan.FromSeconds(10));
 
         // Okay to do wait here, as we are in the main process thread.
         host.StartAsync().Wait(timeout: TimeSpan.FromMinutes(5));
+        LogStartupStep("background services started");
 
         if (startupMode.RunAsMain)
         {
@@ -318,6 +366,7 @@ public class Program
                 // Otherwise, perform the initial setup
                 migration.InitialSetup().Wait();
             }
+            LogStartupStep("database ready");
         }
 
 
@@ -336,6 +385,7 @@ public class Program
         {
             LogMessages.UnobservedReactiveThrownException(_logger, ex);
         });
+        LogStartupStep("ReactiveUI ready");
 
 
         try

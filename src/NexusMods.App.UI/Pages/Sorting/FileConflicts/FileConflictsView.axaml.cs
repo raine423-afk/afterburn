@@ -21,6 +21,8 @@ public partial class FileConflictsView : R3UserControl<IFileConflictsViewModel>
             vm => vm.TreeDataGridAdapter,
             enableDragAndDrop: true);
 
+        AutoResolveButton.Click += (_, _) => ViewModel?.AutoResolveCommand.Execute(Unit.Default);
+
         this.WhenActivated(disposables =>
         {
             // TreeDataGrid Source

@@ -18,6 +18,17 @@
             <TextBlock x:Name="EmptySpaceMessageTextBlock" />
         </controls:EmptyState.Subtitle>
 
+        <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+            <controls:StandardButton x:Name="AutoResolveButton"
+                                     Text="Fix conflicts automatically"
+                                     LeftIcon="{x:Static icons:IconValues.TrophyOutline}"
+                                     ShowIcon="Left"
+                                     Size="Small"
+                                     Type="Secondary"
+                                     Fill="Weak"
+                                     ToolTip.Tip="Patches and fixes win over the mods they patch, collections keep their author's order, and mods you installed yourself win over collection mods. Mods without a conflict keep their place." />
+        </StackPanel>
         <!-- treedatagrid and trophy bar -->
         <Grid x:Name="MainGrid" ColumnDefinitions="*, Auto">
 
@@ -184,6 +195,7 @@
             </Grid>
 
         </Grid>
+        </DockPanel>
     </controls:EmptyState>
 
 </sdk:R3UserControl>
