@@ -84,6 +84,8 @@ public partial class MainWindow : ReactiveWindow<MainWindowViewModel>
             this.WhenAnyObservable(view => view.ViewModel!.BringWindowToFront)
                 .OnUI()
                 .Where(static shouldBringToFront => shouldBringToFront)
+                .Select(static _ => System.Reactive.Unit.Default)
+                .Merge(this.WhenAnyObservable(view => view.ViewModel!.ShowRequested).OnUI())
                 .Subscribe(_ => {
                     // Afterburn: opened again while an apply was finishing in the background.
                     if (!IsVisible)

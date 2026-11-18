@@ -176,6 +176,7 @@ public sealed class CyberpunkConflictResolver : IConflictReportProvider
         if (File.Exists(markerFile)) long.TryParse(await File.ReadAllTextAsync(markerFile, cancellationToken), out lastHandled);
 
         var brokenPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); // game-relative path prefix -> reason
+        var newestHandled = lastHandled;
 
         if (redscriptLog.Exists && redscriptLog.LastWriteTimeUtc.Ticks > lastHandled)
         {
@@ -193,7 +194,7 @@ public sealed class CyberpunkConflictResolver : IConflictReportProvider
                 brokenPaths.TryAdd(prefix, "its scripts don't compile on this game version");
             }
 
-            await File.WriteAllTextAsync(markerFile, redscriptLog.LastWriteTimeUtc.Ticks.ToString(), cancellationToken);
+            newestHandled = Math.Max(newestHandled, redscriptLog.LastWriteTimeUtc.Ticks);
             summary.ReadNewGameLogs = true;
         }
 
@@ -205,6 +206,7 @@ public sealed class CyberpunkConflictResolver : IConflictReportProvider
             if (latest is not null && latest.LastWriteTimeUtc.Ticks > lastHandled)
             {
                 summary.ReadNewGameLogs = true;
+                newestHandled = Math.Max(newestHandled, latest.LastWriteTimeUtc.Ticks);
                 string? currentPlugin = null;
                 foreach (var line in File.ReadLines(latest.FullName))
                 {
@@ -221,6 +223,13 @@ public sealed class CyberpunkConflictResolver : IConflictReportProvider
                     }
                 }
             }
+        }
+
+        // Afterburn: remember the newest log handled (redscript or RED4ext), so neither is read and reported again.
+        if (newestHandled > lastHandled)
+        {
+            try { Directory.CreateDirectory(logsDir); await File.WriteAllTextAsync(markerFile, newestHandled.ToString(), cancellationToken); }
+            catch (Exception e) { _logger.LogDebug(e, "Couldn't save which game logs were read"); }
         }
 
         if (brokenPaths.Count == 0) return;
@@ -322,7 +331,27 @@ public sealed class CyberpunkConflictResolver : IConflictReportProvider
             _logger.LogWarning("Conflict check: {Count} archive(s) look damaged or incomplete: {Names}", damaged.Length, string.Join(", ", damaged.Take(10)));
         }
 
-        if (conflicting.Count == 0) return;
+        if (conflicting.Count == 0)
+        {
+            // Afterburn: no conflicts left. If the modlist.txt is Afterburn's own, remove it so the game goes back to
+            // its default order instead of keeping an old one (a modlist.txt you made yourself is never touched).
+            try
+            {
+                var ownModList = Path.Combine(modDir.FullName, "modlist.txt");
+                var owner = Path.Combine(modDir.FullName, ModListOwnerFile);
+                if (File.Exists(owner))
+                {
+                    if (File.Exists(ownModList)) File.Delete(ownModList);
+                    File.Delete(owner);
+                    summary.ModListChanged = true;
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.LogDebug(e, "Couldn't remove Afterburn's old modlist.txt");
+            }
+            return;
+        }
 
         // The game loads archives in ASCII (ordinal) order and the first one wins. Respect the author's intent first:
         // names starting with "#", "!", "_" or a digit are meant to win and keep their order; names starting with

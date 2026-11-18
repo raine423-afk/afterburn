@@ -48,6 +48,9 @@ public class MainWindowViewModel : AViewModel<IMainWindowViewModel>, IMainWindow
     private readonly IWindowNotificationService _notificationService;
 
     public ReactiveUI.ReactiveCommand<System.Reactive.Unit, bool> BringWindowToFront { get; }
+
+    /// <summary>Afterburn: fires when the window must be shown (Afterburn was started again).</summary>
+    public System.Reactive.Subjects.Subject<System.Reactive.Unit> ShowRequested { get; } = new();
     public ReactiveUI.ReactiveCommand<IStorageProvider, System.Reactive.Unit> RegisterStorageProvider { get; }
     public ReactiveUI.ReactiveCommand<IClipboard, System.Reactive.Unit> RegisterClipboard { get; }
 
@@ -136,6 +139,14 @@ public class MainWindowViewModel : AViewModel<IMainWindowViewModel>, IMainWindow
                 .BindTo(this, vm => vm.CurrentOverlay)
                 .DisposeWith(d);
             
+            // Afterburn: started again while already running. Always show the window, whatever the
+            // "bring window to front" setting says, because the user just asked for it.
+            eventBus
+                .ObserveMessages<CliMessages.ShowMainWindow>()
+                .ObserveOnUIThreadDispatcher()
+                .Subscribe(this, static (_, self) => self.ShowRequested.OnNext(System.Reactive.Unit.Default))
+                .DisposeWith(d);
+
             eventBus
                 .ObserveMessages<CliMessages.CollectionAddStarted>()
                 .ObserveOnUIThreadDispatcher()

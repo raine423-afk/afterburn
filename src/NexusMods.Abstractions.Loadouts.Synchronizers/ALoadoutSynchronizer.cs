@@ -42,6 +42,53 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     /// </summary>
     private static Size MaximumBackupSize => Size.GB * 5;
 
+    // Afterburn: list of ".afterburn-tmp" files an apply is writing right now (see ActionExtractToDisk).
+    private static string PendingTempFilesList => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Afterburn", "apply-in-progress.txt");
+
+    private static void WritePendingTempFiles(IEnumerable<string> paths)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(PendingTempFilesList)!);
+            File.WriteAllLines(PendingTempFilesList, paths);
+        }
+        catch { /* only used for clean-up */ }
+    }
+
+    private static void ClearPendingTempFiles()
+    {
+        try { File.Delete(PendingTempFilesList); } catch { /* only used for clean-up */ }
+    }
+
+    /// <summary>
+    /// Afterburn: if the last apply was cut off (the app closed, a crash, power loss), delete the temporary files it
+    /// left behind. Only exact paths it wrote down are touched, and only ones ending in ".afterburn-tmp".
+    /// </summary>
+    private void RecoverInterruptedApply()
+    {
+        try
+        {
+            if (!File.Exists(PendingTempFilesList)) return;
+            var removed = 0;
+            foreach (var path in File.ReadAllLines(PendingTempFilesList))
+            {
+                if (!path.EndsWith(".afterburn-tmp", StringComparison.OrdinalIgnoreCase)) continue;
+                try
+                {
+                    if (File.Exists(path)) { File.Delete(path); removed++; }
+                }
+                catch { /* skip this one */ }
+            }
+            ClearPendingTempFiles();
+            if (removed > 0) Logger.LogInformation("Removed {Count} unfinished file(s) left by an apply that was cut off", removed);
+        }
+        catch (Exception e)
+        {
+            Logger.LogDebug(e, "Couldn't clean up after an interrupted apply");
+        }
+    }
+
     /// <summary>
     /// Afterburn: largest amount of data written into one backup archive.
     /// </summary>
@@ -855,11 +902,16 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
                 toExtractTemp.Add((hash, tempPath));
             }
 
+            // Remember the temporary files until they are renamed, so an apply that is cut off can clean them up
+            // next time (otherwise they would stay in the game folder and show up as External Changes).
+            WritePendingTempFiles(toExtractTemp.Select(static x => x.Dest.GetFullPath()));
+
             try
             {
                 await _fileStore.ExtractFiles(toExtractTemp, CancellationToken.None, UpdateStatus);
                 for (var i = 0; i < toExtract.Count; i++)
                     System.IO.File.Move(toExtractTemp[i].Dest.GetFullPath(), toExtract[i].Path.GetFullPath(), overwrite: true);
+                ClearPendingTempFiles();
             }
             catch
             {
@@ -868,6 +920,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
                     try { System.IO.File.Delete(tempPath.GetFullPath()); }
                     catch { /* best effort */ }
                 }
+                ClearPendingTempFiles();
                 throw;
             }
 
@@ -1043,6 +1096,7 @@ public partial class ALoadoutSynchronizer : ILoadoutSynchronizer
     public virtual async Task<Loadout.ReadOnly> Synchronize(Loadout.ReadOnly loadout, SynchronizeLoadoutJob? job = null)
     {
         using var applying = ApplyTracker.Begin();
+        RecoverInterruptedApply();
         loadout = loadout.Rebase();
         
         // Update locator IDs before building the sync tree

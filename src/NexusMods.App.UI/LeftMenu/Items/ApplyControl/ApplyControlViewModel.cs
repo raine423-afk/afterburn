@@ -55,6 +55,8 @@ public class ApplyControlViewModel : AViewModel<IApplyControlViewModel>, IApplyC
     [
         "r6/cache", "r6/logs", "red4ext/logs", "bin/x64/plugins/cyber_engine_tweaks/scripting.log",
         "archive/pc/content", "archive/pc/ep1", "tools/redmod/bin", "engine/config/platform",
+        // Written by Afterburn's own conflict check.
+        "archive/pc/mod/modlist.txt", "archive/pc/mod/afterburn-modlist.owner",
     ];
 
     // Afterburn: when Afterburn or the game last touched the game folder (Environment.TickCount64), so the watcher
