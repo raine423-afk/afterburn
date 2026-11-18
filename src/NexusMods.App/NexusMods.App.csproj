@@ -94,9 +94,6 @@
         <None Update="com.nexusmods.app.metainfo.xml">
             <DependentUpon>app.pupnet.conf</DependentUpon>
         </None>
-        <None Update="sign.bat">
-            <DependentUpon>app.pupnet.conf</DependentUpon>
-        </None>
         <None Update="uninstall.bat">
             <DependentUpon>app.pupnet.conf</DependentUpon>
         </None>

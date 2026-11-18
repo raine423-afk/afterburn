@@ -37,10 +37,22 @@ public class SyncFile
     {
         var key = RandomNumberGenerator.GetBytes(AuthKeyLength);
         var tmp = _authKeyPath + ".tmp";
-        File.WriteAllBytes(tmp, key);
-        if (!OperatingSystem.IsWindows())
+        if (OperatingSystem.IsWindows())
         {
-            try { File.SetUnixFileMode(tmp, UnixFileMode.UserRead | UnixFileMode.UserWrite); } catch { /* best effort */ }
+            File.WriteAllBytes(tmp, key);
+        }
+        else
+        {
+            // Afterburn: create the file owner-only from the start, so the secret is never readable by others,
+            // not even for the moment before permissions would otherwise be changed.
+            try { File.Delete(tmp); } catch { /* not there */ }
+            using var stream = new FileStream(tmp, new FileStreamOptions
+            {
+                Mode = FileMode.CreateNew,
+                Access = FileAccess.Write,
+                UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+            });
+            stream.Write(key);
         }
         File.Move(tmp, _authKeyPath, overwrite: true);
         return key;

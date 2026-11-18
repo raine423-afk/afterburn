@@ -45,9 +45,9 @@ public static class ApiKeyStore
             if (fromEnvironment is null && OperatingSystem.IsWindows())
                 fromEnvironment = Clean(Environment.GetEnvironmentVariable(EnvironmentVariable, EnvironmentVariableTarget.User));
 
-            var fromFile = OperatingSystem.IsWindows() ? TryReadFile() : null;
+            var fromFile = TryReadFile();
 
-            if (fromEnvironment is not null && OperatingSystem.IsWindows() && !string.Equals(fromEnvironment, fromFile, StringComparison.Ordinal))
+            if (fromEnvironment is not null && !string.Equals(fromEnvironment, fromFile, StringComparison.Ordinal))
                 TryWriteFile(fromEnvironment);
 
             _cached = fromEnvironment ?? fromFile;
@@ -71,9 +71,6 @@ public static class ApiKeyStore
         if (key is null || key.Length < 20 || key.Length > 400 || !key.All(static c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '=' or '+' or '/' or '.'))
             return (false, "Copy your Personal API Key from nexusmods.com/users/myaccount?tab=api first, then click this button again.");
 
-        if (!OperatingSystem.IsWindows())
-            return (false, "Saving an API key is only supported on Windows.");
-
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
@@ -94,7 +91,9 @@ public static class ApiKeyStore
         }
 
         if (!TryWriteFile(key))
-            return (false, "The key is valid, but Afterburn couldn't save it. Check that your Windows user can write to %LOCALAPPDATA%\\AfterburnData.");
+            return (false, OperatingSystem.IsWindows()
+                ? "The key is valid, but Afterburn couldn't save it. Check that your Windows user can write to %LOCALAPPDATA%\\AfterburnData."
+                : "The key is valid, but Afterburn couldn't save it. Check that you can write to ~/.local/share/Afterburn.");
 
         lock (Gate)
         {
@@ -105,8 +104,29 @@ public static class ApiKeyStore
         return (true, "API key saved. Close Afterburn completely (check the tray icon too) and open it again to finish logging in.");
     }
 
+    // Afterburn: on Linux / Steam Deck there is no DPAPI. The key is kept in a file only the current user can read
+    // (mode 600, in a mode 700 folder), the same way other Linux apps keep tokens.
+    private static string UnixKeyFolder => Path.Combine(
+        Environment.GetEnvironmentVariable("XDG_DATA_HOME") is { Length: > 0 } xdg ? xdg : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share"),
+        "Afterburn");
+
+    private static string UnixKeyFilePath => Path.Combine(UnixKeyFolder, "nexus-api-key");
+
     private static string? TryReadFile()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            try
+            {
+                if (!File.Exists(UnixKeyFilePath)) return null;
+                return Clean(File.ReadAllText(UnixKeyFilePath));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         try
         {
             if (!File.Exists(KeyFilePath)) return null;
@@ -121,6 +141,33 @@ public static class ApiKeyStore
 
     private static bool TryWriteFile(string key)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            try
+            {
+                Directory.CreateDirectory(UnixKeyFolder);
+                File.SetUnixFileMode(UnixKeyFolder, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                var tmp = UnixKeyFilePath + ".tmp";
+                // Create the file with owner-only permissions before any secret is written to it.
+                using (var stream = new FileStream(tmp, new FileStreamOptions
+                       {
+                           Mode = FileMode.Create,
+                           Access = FileAccess.Write,
+                           UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                       }))
+                using (var writer = new StreamWriter(stream))
+                {
+                    writer.Write(key);
+                }
+                File.Move(tmp, UnixKeyFilePath, overwrite: true);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         try
         {
             var encrypted = Protect(Encoding.UTF8.GetBytes(key));

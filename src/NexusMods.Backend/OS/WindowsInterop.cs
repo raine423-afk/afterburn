@@ -24,6 +24,9 @@ internal partial class WindowsInterop : IOSInterop
         _processRunner = serviceProvider.GetRequiredService<IProcessRunner>();
     }
 
+    // Afterburn: the real explorer.exe from the Windows folder, never one found elsewhere on the search path.
+    private static string ExplorerPath => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+
     public AbsolutePath GetRunningExecutablePath(out string rawPath)
     {
         rawPath = Environment.ProcessPath ?? throw new NotSupportedException("Unable to get process path");
@@ -75,7 +78,7 @@ internal partial class WindowsInterop : IOSInterop
         // exists immediately. The process lifetime isn't tied to the window.
         // https://ss64.com/nt/explorer.html
         var nativePath = directoryPath.ToNativeSeparators(_fileSystem.OS);
-        var command = Cli.Wrap("explorer.exe").WithArguments($@"""{nativePath}""")
+        var command = Cli.Wrap(ExplorerPath).WithArguments($@"""{nativePath}""")
             .WithValidation(CommandResultValidation.None);
         _processRunner.Run(command, logOutput: false);
     }

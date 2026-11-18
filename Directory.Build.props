@@ -6,7 +6,7 @@
     <PropertyGroup>
         <TargetFramework>net9.0</TargetFramework>
         <!-- Afterburn: app version shown in the bottom bar. Keep in step with AppVersion in installer\afterburn.iss. -->
-        <Version>1.2.0</Version>
+        <Version>1.2.1</Version>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

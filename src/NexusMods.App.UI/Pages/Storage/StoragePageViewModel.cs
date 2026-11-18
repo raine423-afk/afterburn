@@ -1,3 +1,7 @@
+using NexusMods.UI.Sdk.Dialog.Enums;
+using NexusMods.UI.Sdk.Dialog;
+using NexusMods.App.UI.Dialog.Enums;
+using NexusMods.App.UI.Dialog;
 using System.Collections.ObjectModel;
 using System.Reactive;
 using System.Reactive.Disposables;
@@ -201,7 +205,8 @@ public class StoragePageViewModel : APageViewModel<IStoragePageViewModel>, IStor
 
         LoadRestorePoints();
 
-        var rows = await Task.Run(BuildUnmanagedRows);
+        var data = await Task.Run(GatherUnmanagedFolders);
+        var rows = BuildUnmanagedRows(data);
         _folders.Clear();
         foreach (var row in rows) _folders.Add(row);
 
@@ -213,16 +218,14 @@ public class StoragePageViewModel : APageViewModel<IStoragePageViewModel>, IStor
               "Afterburn keeps a backup copy of them so it can put them back; turn that off for folders you'd rather not duplicate.";
     }
 
-    private List<UnmanagedFolderRow> BuildUnmanagedRows()
+    private List<((LocationId Location, string Folder) Key, (int Files, long Bytes) Value)> GatherUnmanagedFolders()
     {
-        var result = new List<UnmanagedFolderRow>();
+        var groups = new Dictionary<(LocationId, string), (int Files, long Bytes)>();
         try
         {
             var db = _connection.Db;
-            if (!LoadoutOverridesGroup.FindByOverridesFor(db, LoadoutId).TryGetFirst(out var overrides)) return result;
+            if (!LoadoutOverridesGroup.FindByOverridesFor(db, LoadoutId).TryGetFirst(out var overrides)) return [];
 
-            var loadout = Loadout.Load(db, LoadoutId);
-            var groups = new Dictionary<(LocationId, string), (int Files, long Bytes)>();
             foreach (var item in overrides.AsLoadoutItemGroup().Children.OfTypeLoadoutItemWithTargetPath())
             {
                 var location = item.TargetPath.Item2;
@@ -233,8 +236,21 @@ public class StoragePageViewModel : APageViewModel<IStoragePageViewModel>, IStor
                 groups.TryGetValue(key, out var acc);
                 groups[key] = (acc.Files + 1, acc.Bytes + size);
             }
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Couldn't list the game-folder files Afterburn didn't install");
+        }
+        return groups.OrderByDescending(kv => kv.Value.Bytes).Select(kv => (kv.Key, kv.Value)).ToList();
+    }
 
-            foreach (var ((location, folder), (files, bytes)) in groups.OrderByDescending(kv => kv.Value.Bytes))
+    private List<UnmanagedFolderRow> BuildUnmanagedRows(List<((LocationId Location, string Folder) Key, (int Files, long Bytes) Value)> data)
+    {
+        var result = new List<UnmanagedFolderRow>();
+        try
+        {
+            var loadout = Loadout.Load(_connection.Db, LoadoutId);
+            foreach (var ((location, folder), (files, bytes)) in data)
             {
                 UnmanagedFolderRow? row = null;
                 var toggle = ReactiveCommand.Create(() =>
@@ -248,7 +264,8 @@ public class StoragePageViewModel : APageViewModel<IStoragePageViewModel>, IStor
                 {
                     try
                     {
-                        var absolute = loadout.InstallationInstance.Locations.ToAbsolutePath(new GamePath(location, RelativePath.FromUnsanitizedInput(folder)));
+                        var relative = folder.Length == 0 ? RelativePath.Empty : RelativePath.FromUnsanitizedInput(folder);
+                        var absolute = loadout.InstallationInstance.Locations.ToAbsolutePath(new GamePath(location, relative));
                         _osInterop.OpenDirectory(absolute);
                     }
                     catch (Exception e)
@@ -257,7 +274,7 @@ public class StoragePageViewModel : APageViewModel<IStoragePageViewModel>, IStor
                     }
                 });
 
-                var makeMod = ReactiveCommand.CreateFromTask(() => MakeModFromFolderAsync(location, folder));
+                var makeMod = ReactiveCommand.CreateFromTask(() => MakeModFromFolderAsync(location, folder, files));
 
                 row = new UnmanagedFolderRow
                 {
@@ -318,7 +335,8 @@ public class StoragePageViewModel : APageViewModel<IStoragePageViewModel>, IStor
                     try
                     {
                         if (!Directory.Exists(folder)) return;
-                        foreach (var file in Directory.EnumerateFiles(folder, pattern, option))
+                        var enumeration = new EnumerationOptions { IgnoreInaccessible = true, RecurseSubdirectories = option == SearchOption.AllDirectories };
+                        foreach (var file in Directory.EnumerateFiles(folder, pattern, enumeration))
                         {
                             try
                             {
@@ -360,8 +378,19 @@ public class StoragePageViewModel : APageViewModel<IStoragePageViewModel>, IStor
                 }
                 catch { /* optional */ }
 
-                // Afterburn's own current log.
-                AddFolder(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Afterburn", "Logs"), "afterburn", "nexusmods.app.main.current.log", SearchOption.TopDirectoryOnly);
+                // Afterburn's own current log, with the Windows user name taken out.
+                try
+                {
+                    var logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Afterburn", "Logs", "nexusmods.app.main.current.log");
+                    if (File.Exists(logPath))
+                    {
+                        using var reader = new StreamReader(new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete));
+                        using var writer = new StreamWriter(zip.CreateEntry("afterburn/nexusmods.app.main.current.log").Open());
+                        writer.Write(RedactUser(reader.ReadToEnd()));
+                        added++;
+                    }
+                }
+                catch { /* optional */ }
 
                 void AddText(string name, string text)
                 {
@@ -370,8 +399,8 @@ public class StoragePageViewModel : APageViewModel<IStoragePageViewModel>, IStor
                 }
 
                 AddText("mod-list.txt", modList);
-                AddText("recently-changed-game-files.txt", ListRecentlyChangedFiles(gameRoot));
-                AddText("README.txt", $"Collected by Afterburn {ApplicationConstants.Version} on {DateTime.Now:yyyy-MM-dd HH:mm}.\nGame folder: {gameRoot}\nLog files included: {added}\n");
+                AddText("recently-changed-game-files.txt", RedactUser(ListRecentlyChangedFiles(gameRoot)));
+                AddText("README.txt", RedactUser($"Collected by Afterburn {ApplicationConstants.Version} on {DateTime.Now:yyyy-MM-dd HH:mm}.\nGame folder: {gameRoot}\nLog files included: {added}\n"));
                 return target;
             });
 
@@ -382,6 +411,23 @@ public class StoragePageViewModel : APageViewModel<IStoragePageViewModel>, IStor
         {
             _logger.LogError(e, "Couldn't collect the game logs");
             GameLogsStatus = "Couldn't collect the logs: " + e.Message;
+        }
+    }
+
+    private static string RedactUser(string text)
+    {
+        try
+        {
+            var user = Environment.UserName;
+            if (string.IsNullOrWhiteSpace(user) || user.Length < 2) return text;
+            return text
+                .Replace($"\\Users\\{user}", "\\Users\\<user>", StringComparison.OrdinalIgnoreCase)
+                .Replace($"/Users/{user}", "/Users/<user>", StringComparison.OrdinalIgnoreCase)
+                .Replace($"/home/{user}", "/home/<user>", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return text;
         }
     }
 
@@ -421,7 +467,7 @@ public class StoragePageViewModel : APageViewModel<IStoragePageViewModel>, IStor
         {
             var skip = new[] { Path.Combine("archive", "pc", "content"), Path.Combine("archive", "pc", "ep1") };
             var files = new List<FileInfo>();
-            foreach (var path in Directory.EnumerateFiles(gameRoot, "*", SearchOption.AllDirectories))
+            foreach (var path in Directory.EnumerateFiles(gameRoot, "*", new EnumerationOptions { IgnoreInaccessible = true, RecurseSubdirectories = true }))
             {
                 var relative = Path.GetRelativePath(gameRoot, path);
                 if (skip.Any(s => relative.StartsWith(s, StringComparison.OrdinalIgnoreCase))) continue;
@@ -448,6 +494,8 @@ public class StoragePageViewModel : APageViewModel<IStoragePageViewModel>, IStor
             var db = _connection.Db;
             var current = Loadout.Load(db, LoadoutId);
             if (!current.IsValid()) return;
+            var metadata = GameInstallMetadata.Load(db, current.InstallationId);
+            var activeId = metadata.Contains(GameInstallMetadata.LastSyncedLoadout) ? metadata.LastSyncedLoadout.LoadoutId : current.LoadoutId;
             var points = Loadout.All(db)
                 .Where(l => l.IsVisible() && l.InstallationId == current.InstallationId && l.Name.StartsWith(RestorePointPrefix, StringComparison.Ordinal))
                 .OrderByDescending(l => l.Name, StringComparer.Ordinal)
@@ -456,7 +504,7 @@ public class StoragePageViewModel : APageViewModel<IStoragePageViewModel>, IStor
             foreach (var point in points)
             {
                 var id = point.LoadoutId;
-                var isCurrent = id == LoadoutId;
+                var isCurrent = id == activeId;
                 _restorePoints.Add(new RestorePointRow
                 {
                     Name = point.Name,
@@ -477,7 +525,9 @@ public class StoragePageViewModel : APageViewModel<IStoragePageViewModel>, IStor
                     }),
                     DeleteCommand = ReactiveCommand.CreateFromTask(async () =>
                     {
-                        if (id == LoadoutId) { RestorePointStatus = "That restore point is in use, so it can't be deleted. Switch to another loadout first."; return; }
+                        var meta = GameInstallMetadata.Load(_connection.Db, current.InstallationId);
+                        var activeNow = meta.Contains(GameInstallMetadata.LastSyncedLoadout) ? meta.LastSyncedLoadout.LoadoutId : current.LoadoutId;
+                        if (id == activeNow || id == LoadoutId) { RestorePointStatus = "That restore point is in use, so it can't be deleted. Switch to another loadout first."; return; }
                         await _loadoutManager.DeleteLoadout(id);
                         LoadRestorePoints();
                         RestorePointStatus = $"Deleted {point.Name}.";
@@ -518,9 +568,27 @@ public class StoragePageViewModel : APageViewModel<IStoragePageViewModel>, IStor
     /// added to the Library and installed, then removed from External Changes. Nothing on disk moves, and afterwards
     /// the mod can be switched off, updated and sorted like any other.
     /// </summary>
-    private async Task MakeModFromFolderAsync(LocationId location, string folder)
+    private async Task MakeModFromFolderAsync(LocationId location, string folder, int fileCount)
     {
         var display = folder.Length == 0 ? "game folder" : folder;
+
+        // Everything in the folder becomes ONE mod, which isn't always what people expect (archive/pc/mod usually holds
+        // many separate mods), so say so first.
+        var confirm = await WindowManager.ShowDialog(DialogFactory.CreateStandardDialog(
+            $"Turn {display} into one mod?",
+            new StandardDialogParameters
+            {
+                Text = $"All {fileCount:N0} files in {display} that Afterburn didn't install will become a single mod in your Library and My Mods. " +
+                       "Your files stay where they are. Switching that mod off later removes all of them from the game folder at once (they stay in the Library, so you can switch it back on).",
+            },
+            [
+                DialogStandardButtons.Cancel,
+                new DialogButtonDefinition("Turn into a mod", ButtonDefinitionId.Accept, ButtonAction.Accept, ButtonStyling.Primary),
+            ],
+            DialogWindowSize.Medium
+        ), DialogWindowType.Modal);
+        if (confirm.ButtonId != ButtonDefinitionId.Accept) return;
+
         MakeModStatus = $"Turning {display} into a mod…";
         if (location != LocationId.Game)
         {
@@ -578,9 +646,23 @@ public class StoragePageViewModel : APageViewModel<IStoragePageViewModel>, IStor
             var localFile = await _libraryService.AddLocalFile(FileSystem.Shared.FromUnsanitizedFullPath(zipPath));
             var libraryItem = localFile.AsLibraryFile().AsLibraryItem();
             var result = await _loadoutManager.InstallItem(libraryItem, LoadoutId);
-            if (result.LoadoutItemGroup is null)
+            if (result.LoadoutItemGroup is not { } installed)
             {
                 MakeModStatus = $"Afterburn couldn't install {display} as a mod. The files are still in External Changes and nothing was changed.";
+                return;
+            }
+
+            // Safety check: the new mod must put every file exactly where it already is. If an installer rearranged
+            // them, taking them out of External Changes would make the next Apply move or delete the originals.
+            var expected = items.Select(i => (i.TargetPath.Item2, i.TargetPath.Item3.ToString().Replace('\\', '/').ToLowerInvariant())).ToHashSet();
+            var installedGroup = LoadoutItemGroup.Load(_connection.Db, installed.Id);
+            var actual = installedGroup.Children.OfTypeLoadoutItemWithTargetPath()
+                .Select(i => (i.TargetPath.Item2, i.TargetPath.Item3.ToString().Replace('\\', '/').ToLowerInvariant()))
+                .ToHashSet();
+            if (!expected.SetEquals(actual))
+            {
+                await _loadoutManager.RemoveItems([installed.LoadoutItemGroupId]);
+                MakeModStatus = $"Afterburn's installer would have put some of the files in {display} somewhere else, so it stopped. Nothing was changed; the files are still in External Changes.";
                 return;
             }
 

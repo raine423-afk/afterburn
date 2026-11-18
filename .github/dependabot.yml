@@ -39,3 +39,10 @@ updates:
       GameFinder:
         patterns:
           - "GameFinder*"
+
+  # Afterburn: keep the pinned GitHub Actions (and their security fixes) up to date too.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"

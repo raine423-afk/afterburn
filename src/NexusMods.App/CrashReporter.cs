@@ -49,7 +49,7 @@ internal static class CrashReporter
                 "A crash log was saved to:\n" + path + "\n\n" +
                 "You can change this folder in Afterburn's Settings (Crash Log Folder).\n\n" +
                 "Would you like to send the crash log to the developer?\n" +
-                "Yes: copies the log and opens the Afterburn issues page, where you paste it into a new issue.\n" +
+                "Yes: copies the log and opens the Afterburn issues page on GitHub, where you paste it into a new issue. Issues are public, so check the log first.\n" +
                 "No: just close. Nothing is sent unless you choose Yes.";
             var answer = MessageBoxW(IntPtr.Zero, message, "Afterburn crashed", 0x4 | 0x10 | 0x40000);
             if (answer != 6) return;
@@ -111,7 +111,8 @@ internal static class CrashReporter
 
     private static void CopyToClipboard(string text)
     {
-        var psi = new ProcessStartInfo("clip.exe")
+        // Afterburn: use the real clip.exe from System32, never one found elsewhere on the search path.
+        var psi = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "clip.exe"))
         {
             RedirectStandardInput = true,
             UseShellExecute = false,
