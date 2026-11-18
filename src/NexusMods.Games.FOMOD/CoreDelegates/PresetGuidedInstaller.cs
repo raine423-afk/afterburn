@@ -11,6 +11,7 @@ public class PresetGuidedInstaller : IGuidedInstaller
 {
     private readonly FomodOption[] _steps;
     private int _currentStep = 0;
+    private readonly HashSet<int> _usedSteps = new();
 
     /// <summary>
     /// Constructor.
@@ -35,9 +36,29 @@ public class PresetGuidedInstaller : IGuidedInstaller
         // Afterburn: a mod can be updated after a collection saved its installer choices, so the installer may have
         // more or different steps than the preset. Match the step by name first, then by position, and if there's
         // no saved choice for this step, use the installer's own defaults instead of crashing.
-        var step = _steps.FirstOrDefault(s => string.Equals(s.name, installationStep.Name, StringComparison.Ordinal))
-                   ?? (_currentStep < _steps.Length ? _steps[_currentStep] : null);
+        // Prefer the saved step at the same position when its name matches (installers often reuse a name such as
+        // "Options" for several steps), then the first not-yet-used saved step with that name, then the same position.
+        var position = _currentStep;
         _currentStep++;
+        var stepIndex = -1;
+        if (position < _steps.Length && !_usedSteps.Contains(position)
+            && string.Equals(_steps[position].name, installationStep.Name, StringComparison.Ordinal))
+        {
+            stepIndex = position;
+        }
+        else
+        {
+            for (var i = 0; i < _steps.Length; i++)
+            {
+                if (_usedSteps.Contains(i)) continue;
+                if (!string.Equals(_steps[i].name, installationStep.Name, StringComparison.Ordinal)) continue;
+                stepIndex = i;
+                break;
+            }
+            if (stepIndex < 0 && position < _steps.Length && !_usedSteps.Contains(position)) stepIndex = position;
+        }
+        if (stepIndex >= 0) _usedSteps.Add(stepIndex);
+        var step = stepIndex >= 0 ? _steps[stepIndex] : null;
 
         var choices = step is null
             ? new List<SelectedOption>()
