@@ -66,9 +66,10 @@ public class FileConflictsViewModel : AViewModel<IFileConflictsViewModel>, IFile
         
         // Afterburn: the automatic rules normally run after each install. This runs them again for the whole loadout,
         // e.g. for mods installed before the rules existed. Only conflicting mods move; everything else keeps its place.
-        AutoResolveCommand = new R3.ReactiveCommand(_ =>
+        AutoResolveCommand = new R3.ReactiveCommand(unit =>
         {
-            _ = _loadoutManager.AutoResolveFileConflicts(loadoutId).AsTask();
+            var task = _loadoutManager.AutoResolveFileConflicts(loadoutId).AsTask();
+            task.ContinueWith(static t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
         });
 
         TreeDataGridAdapter = new FileConflictsTreeDataGridAdapter(serviceProvider, connection, synchronizer, SortDirectionCurrent.AsObservable(), loadoutId);
