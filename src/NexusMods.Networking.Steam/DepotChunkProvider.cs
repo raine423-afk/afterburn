@@ -67,13 +67,22 @@ public class DepotChunkProvider : IChunkedStreamSource
                 }
                 catch (Exception)
                 {
+                    ArrayPool<byte>.Shared.Return(rented);
                     _session.CDNPool.FailServer();
                     throw;
                 }
 
-                if (read != chunkData.UncompressedLength)
-                    throw new InvalidOperationException("Failed to read the entire chunk");
-                rented.AsMemory(0, buffer.Length).CopyTo(buffer);
+                // Afterburn: always hand the rented buffer back, even when the chunk is short.
+                try
+                {
+                    if (read != chunkData.UncompressedLength)
+                        throw new InvalidOperationException("Failed to read the entire chunk");
+                    rented.AsMemory(0, buffer.Length).CopyTo(buffer);
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(rented);
+                }
             }, token
         );
     }

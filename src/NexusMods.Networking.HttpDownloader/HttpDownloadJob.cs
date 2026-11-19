@@ -209,6 +209,14 @@ public record HttpDownloadJob : IJobDefinitionWithStart<HttpDownloadJob, Absolut
             _state.TotalBytesDownloaded = Size.FromLong(outputStream.Position);
         }
 
+        // Afterburn: a connection that closes early used to count as a finished download, leaving the
+        // rest of the file as zeros. Treat it as a network error so the download retries and resumes.
+        if (_state.ContentLength.HasValue && outputStream.Position < (long)_state.ContentLength.Value.Value)
+        {
+            throw new HttpIOException(HttpRequestError.ResponseEnded,
+                $"The server stopped sending after {outputStream.Position} of {_state.ContentLength.Value.Value} bytes");
+        }
+
         // Ensure progress is set to 100% when download completes
         if (_state.ContentLength.HasValue)
             context.SetPercent(_state.ContentLength.Value, _state.ContentLength.Value);

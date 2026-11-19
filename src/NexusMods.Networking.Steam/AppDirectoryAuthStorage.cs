@@ -30,6 +30,24 @@ internal class AppDirectoryAuthStorage(IFileSystem fileSystem) : IAuthStorage
     {
         if (!_storagePath.Parent.DirectoryExists())
             _storagePath.Parent.CreateDirectory();
-        await _storagePath.WriteAllBytesAsync(data);
+
+        // Afterburn: the file holds a Steam refresh token, so on Linux/macOS create it readable by this user only.
+        if (OperatingSystem.IsWindows())
+        {
+            await _storagePath.WriteAllBytesAsync(data);
+            return;
+        }
+
+        var nativePath = _storagePath.ToNativeSeparators(fileSystem.OS);
+        await using (var stream = new FileStream(nativePath, new FileStreamOptions
+                     {
+                         Mode = FileMode.Create,
+                         Access = FileAccess.Write,
+                         UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                     }))
+        {
+            await stream.WriteAsync(data);
+        }
+        File.SetUnixFileMode(nativePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
     }
 }

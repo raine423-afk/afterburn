@@ -78,9 +78,15 @@ internal class AddLibraryFileJob : IJobDefinitionWithStart<AddLibraryFileJob, Li
         return (multiHash.Hash1, multiHash.Hash2);
     }
 
-    private async Task<LibraryFile.New> AnalyzeFile(IJobContext<AddLibraryFileJob> context, AbsolutePath filePath, bool isNestedFile = false)
+    // Afterburn: archives inside archives are opened at most this many levels deep. Past that, an inner archive is
+    // kept as a plain file, so a booby-trapped download can't nest archives until the disk fills up.
+    private const int MaxNestedArchiveDepth = 4;
+
+    private async Task<LibraryFile.New> AnalyzeFile(IJobContext<AddLibraryFileJob> context, AbsolutePath filePath, bool isNestedFile = false, int depth = 0)
     {
-        var isArchive = isNestedFile ? await CheckIfNestedArchiveAsync(filePath) : await CheckIfArchiveAsync(filePath);
+        var isArchive = isNestedFile
+            ? depth <= MaxNestedArchiveDepth && await CheckIfNestedArchiveAsync(filePath)
+            : await CheckIfArchiveAsync(filePath);
 
         var (hash, md5) = await HashAsync(filePath, isNestedFile: isNestedFile, cancellationToken: context.CancellationToken);
         var libraryFile = CreateLibraryFile(Transaction, filePath, hash, md5);
@@ -102,7 +108,8 @@ internal class AddLibraryFileJob : IJobDefinitionWithStart<AddLibraryFileJob, Li
 
             foreach (var extracted in extractedFiles)
             {
-                var subFile = await AnalyzeFile(context, extracted, isNestedFile: true);
+                context.CancellationToken.ThrowIfCancellationRequested();
+                var subFile = await AnalyzeFile(context, extracted, isNestedFile: true, depth: depth + 1);
                 var path = extracted.RelativeTo(extractionFolder.Path);
                 _ = new LibraryArchiveFileEntry.New(Transaction, subFile.Id)
                 {

@@ -148,6 +148,18 @@ public sealed class UiDelegates : FomodInstaller.Interface.ui.IUIDelegates, IDis
             .RequestUserChoice(guidedInstallationStep, progress, CancellationToken.None)
             .ContinueWith(task =>
             {
+                // Afterburn: if the installer window failed, cancel the install instead of reading task.Result,
+                // which threw into nowhere and left the install (and every later FOMOD install) waiting forever.
+                if (!task.IsCompletedSuccessfully)
+                {
+                    if (task.Exception is not null)
+                        _logger.LogError(task.Exception, "The FOMOD installer window failed; cancelling this install");
+                    try { _cancelInstaller(); }
+                    catch (Exception e) { _logger.LogError(e, "Error while cancelling the FOMOD installer"); }
+                    EndDialog();
+                    return;
+                }
+
                 var result = task.Result;
 
                 if (result.IsCancelInstallation)
@@ -286,7 +298,11 @@ public sealed class UiDelegates : FomodInstaller.Interface.ui.IUIDelegates, IDis
     {
         var image = option.image;
         if (image is null) return null;
-        if (Uri.TryCreate(image, UriKind.Absolute, out var uri)) return new OptionImage(uri);
+        if (Uri.TryCreate(image, UriKind.Absolute, out var uri) && !uri.IsFile && !uri.IsUnc)
+        {
+            // Afterburn: a web image in a mod's installer is only loaded over https; anything else is dropped.
+            return uri.Scheme == Uri.UriSchemeHttps ? new OptionImage(uri) : null;
+        }
 
         var path = RelativePath.FromUnsanitizedInput(image);
 
