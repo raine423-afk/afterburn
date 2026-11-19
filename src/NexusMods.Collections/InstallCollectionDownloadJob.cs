@@ -98,14 +98,21 @@ public class InstallCollectionDownloadJob : IJobDefinitionWithStart<InstallColle
         // Patch files
         foreach (var patchedFile in patchedFiles)
         {
-            if (!group.Children.TryGetFirst(x => LoadoutFile.Hash.TryGetValue(x, out var hash) && hash == patchedFile.OriginalFileHashes.XxHash3, out var fileToPatch))
+            // Afterburn: patch every copy of the original file, not just the first one found.
+            var filesToPatch = group.Children
+                .Where(x => LoadoutFile.Hash.TryGetValue(x, out var hash) && hash == patchedFile.OriginalFileHashes.XxHash3)
+                .ToArray();
+            if (filesToPatch.Length == 0)
             {
                 Logger.LogWarning("Unable to find original file of patched file `{Path}` by hash `{OriginalHash}` in loadout group", patchedFile.FileName, patchedFile.OriginalFileHashes);
                 continue;
             }
 
-            tx.Add(fileToPatch.Id, LoadoutFile.Hash, patchedFile.PatchedFileHashes.XxHash3);
-            tx.Add(fileToPatch.Id, LoadoutFile.Size, patchedFile.PatchedFileHashes.Size);
+            foreach (var fileToPatch in filesToPatch)
+            {
+                tx.Add(fileToPatch.Id, LoadoutFile.Hash, patchedFile.PatchedFileHashes.XxHash3);
+                tx.Add(fileToPatch.Id, LoadoutFile.Size, patchedFile.PatchedFileHashes.Size);
+            }
         }
 
         // Add missing data from the collection to the item
@@ -349,6 +356,18 @@ public class InstallCollectionDownloadJob : IJobDefinitionWithStart<InstallColle
             if (!hashes.TryGetValue(pair.MD5, out var libraryItem))
                 throw new InvalidOperationException("The hash was not found in the archive.");
 
+            // Afterburn: a collection can't place a file outside the game folder. Skip it now with a warning
+            // instead of letting it break every later Apply.
+            try
+            {
+                GamePath.EnsureContained(pair.Path);
+            }
+            catch (InvalidOperationException e)
+            {
+                Logger.LogWarning(e, "Skipping collection file `{Path}` in `{Mod}`: it points outside the game folder", pair.Path, Item.Name);
+                continue;
+            }
+
             // Map the file to the specific path
             _ = new LoadoutFile.New(tx, out var fileId)
             {
@@ -421,7 +440,8 @@ public class InstallCollectionDownloadJob : IJobDefinitionWithStart<InstallColle
         var patchName = RelativePath.FromUnsanitizedInput($"patches/{CollectionMod.Name}/{srcPath}.diff");
         if (!collectionFiles.TryGetValue(patchName, out var patchFile)) throw new KeyNotFoundException($"Collection archive doesn't contain file `{patchName}`");
 
-        var patchedFileStream = new MemoryStream(capacity: (int)srcFile.Size.Value);
+        // Afterburn: clamp the starting capacity; a file over 2 GB used to overflow the int and throw.
+        var patchedFileStream = new MemoryStream(capacity: (int)Math.Min(srcFile.Size.Value, 256UL * 1024 * 1024));
         var (originalFileHashes, patchedFileHashes) = await PatchFile(fileToPatch: srcFile, patchDataFile: patchFile, expectedHash: expectedHash, outputStream: patchedFileStream, cancellationToken: cancellationToken);
 
         var patchedFile = new PatchedFile(

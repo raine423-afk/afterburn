@@ -64,6 +64,13 @@ public sealed class JobContext<TJobDefinition, TJobResult> : IJobWithResult<TJob
             SetStatus(JobStatus.Completed);
             _tcs.TrySetResult(_result.Value);
         }
+        catch (OperationCanceledException ex) when (ex.InnerException is TimeoutException && !JobCancellationToken.IsPaused && !CancellationToken.IsCancellationRequested)
+        {
+            // Afterburn: nobody cancelled this job; a web request timed out. It used to show as "Cancelled"
+            // with no error, so a stalled download looked like the user had stopped it. Report it as a failure.
+            SetStatus(JobStatus.Failed);
+            _tcs.TrySetException(new TimeoutException("A network request timed out", ex));
+        }
         catch (OperationCanceledException)
         {
             // Distinguish between pause and true cancellation

@@ -45,9 +45,10 @@ public class GameToolRunner
 
         // For Linux, if the user is managing the game via Steam, we can use proton (via protontricks)
         var install = loadout.InstallationInstance;
-        if (install.LocatorResult.Store == GameStore.Steam && _protontricks is not null)
+        // Afterburn: a non-numeric Steam id (e.g. a non-Steam shortcut) used to crash the launch; run it directly instead.
+        if (install.LocatorResult.Store == GameStore.Steam && _protontricks is not null
+            && uint.TryParse(install.LocatorResult.StoreIdentifier, out var appId))
         {
-            var appId = uint.Parse(install.LocatorResult.StoreIdentifier);
             command = await _protontricks.MakeLaunchCommand(command, appId);
         }
 

@@ -54,12 +54,12 @@ internal class GitHubApi : IGitHubApi
 
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             request.Headers.Add(HeaderApiVersion, ApiVersion);
 
             if (AuthenticationHeader is not null) request.Headers.Authorization = AuthenticationHeader;
 
-            var response = await _httpClient.SendAsync(request, cancellationToken: cancellationToken).ConfigureAwait(false);
+            using var response = await _httpClient.SendAsync(request, cancellationToken: cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("GitHub Api returned with status code `{Code}`", response.StatusCode);
@@ -93,7 +93,8 @@ internal class GitHubApi : IGitHubApi
         comparer ??= ReleaseTagComparer.Instance;
 
         var releases = await FetchReleases(organization, repository, cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (releases is null) return null;
+        // Afterburn: a repository with no releases used to crash the update check on releases[^1].
+        if (releases is null || releases.Length == 0) return null;
 
         if (releases.Length > 1) Array.Sort(releases, comparer);
         var latest = releases[^1];

@@ -289,6 +289,18 @@ public class FomodXmlInstaller : ALibraryArchiveInstaller
             return;
         }
 
+        // Afterburn: skip a destination that would leave the game folder here, at install time, instead of
+        // letting it fail every later Apply of the whole loadout.
+        try
+        {
+            GamePath.EnsureContained(gamePath.Path.Join(dest));
+        }
+        catch (InvalidOperationException e)
+        {
+            _logger.LogWarning(e, "Skipping FOMOD file `{Source}`: its destination `{Destination}` is outside the game folder", src, dest);
+            return;
+        }
+
         _ = new LoadoutFile.New(transaction, out var id)
         {
             LoadoutItemWithTargetPath = new LoadoutItemWithTargetPath.New(transaction, id)

@@ -114,21 +114,36 @@ public class Session : ISteamSession
         return Task.CompletedTask;
     }
     
-    private async Task LoggedOnCallback(SteamUser.LoggedOnCallback callback)
+    private Task LoggedOnCallback(SteamUser.LoggedOnCallback callback)
     {
+        // Afterburn: a failed logon (e.g. an expired saved token) used to count as logged on.
+        if (callback.Result != EResult.OK)
+        {
+            _logger.LogWarning("Steam logon failed: {Result}. Will sign in again without the saved token", callback.Result);
+            _ignoreSavedAuth = true;
+            return Task.CompletedTask;
+        }
+
         _isLoggedOn = true;
         _logger.LogInformation("Logged on to Steam network.");
+        return Task.CompletedTask;
     }
 
-    private async Task DisconnectedCallback(SteamClient.DisconnectedCallback callback)
+    private Task DisconnectedCallback(SteamClient.DisconnectedCallback callback)
     {
+        // Afterburn: reset state, so the next request reconnects instead of waiting forever.
+        _isConnected = false;
+        _isLoggedOn = false;
         _logger.LogInformation("Disconnected from Steam network.");
+        return Task.CompletedTask;
     }
+
+    private volatile bool _ignoreSavedAuth;
     
     private async Task ConnectedCallback(SteamClient.ConnectedCallback callback)
     {
         _isConnected = true;
-        var (success, data) = await _authStorage.TryLoad();
+        var (success, data) = _ignoreSavedAuth ? (false, Array.Empty<byte>()) : await _authStorage.TryLoad();
         if (success)
         {
             _logger.LogInformation("Using saved auth data to log in.");
@@ -194,7 +209,12 @@ public class Session : ISteamSession
     /// </summary>
     private Action<T> WrapAsync<T>(Func<T, Task> action)
     {
-        return arg => Task.Run(async () => await action(arg));
+        return arg => Task.Run(async () =>
+        {
+            // Afterburn: log failures instead of losing them in an unobserved task.
+            try { await action(arg); }
+            catch (Exception ex) { _logger.LogError(ex, "Steam callback {Callback} failed", typeof(T).Name); }
+        });
     }
 
     /// <inheritdoc />
@@ -221,13 +241,11 @@ public class Session : ISteamSession
     /// </summary>
     private async Task ConnectedAsync(CancellationToken cancellationToken)
     {
-        if (!_isConnected)
-        {
-            _steamClient.Connect();
-        }
-        
         while (!_isLoggedOn)
         {
+            // Afterburn: reconnect whenever the connection dropped, not just the first time.
+            if (!_isConnected && !_steamClient.IsConnected)
+                _steamClient.Connect();
             await _callbacks.RunWaitCallbackAsync(cancellationToken);
         }
     }

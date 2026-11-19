@@ -64,6 +64,11 @@ internal class Client : IClient
     /// </summary>
     private Channel<NXMGogAuthUrl> _authUrls = Channel.CreateUnbounded<NXMGogAuthUrl>();
 
+    // Afterburn: only accept GOG auth links while a login we started is waiting for one.
+    // Otherwise any web page could queue an nxm://gog-auth link ahead of time and the next
+    // login would silently use that code (signing the user into someone else's account).
+    private volatile bool _waitingForAuthUrl;
+
     internal readonly ResiliencePipeline _pipeline;
 
     /// <summary>
@@ -108,13 +113,15 @@ internal class Client : IClient
             { "redirect_uri", RedirectUrl.ToString() },
         };
 
-        var urlTask = _authUrls.Reader.ReadAsync(token).AsTask();
-        
-        _osInterop.OpenUri(new Uri(QueryHelpers.AddQueryString(AuthorizationUri.ToString(), authQuery)));
+        // Afterburn: throw away any auth links that arrived before this login started.
+        while (_authUrls.Reader.TryRead(out _)) { }
+        _waitingForAuthUrl = true;
 
         var code = "";
         try
         {
+            var urlTask = _authUrls.Reader.ReadAsync(token).AsTask();
+            _osInterop.OpenUri(new Uri(QueryHelpers.AddQueryString(AuthorizationUri.ToString(), authQuery)));
             var result = await urlTask;
             code = result.Code;
         }
@@ -122,6 +129,10 @@ internal class Client : IClient
         {
             _logger.LogError(ex, "Failed to get the OAuth code.");
             return;
+        }
+        finally
+        {
+            _waitingForAuthUrl = false;
         }
         
         // Request the token
@@ -288,21 +299,31 @@ internal class Client : IClient
         // We don't really care about any of this since we can just get the game contents directly by finding
         // the ZIP archive embedded in the downloaded file and only extracting the game files.
 
+        var startPosition = output.CanSeek ? output.Position : -1;
         await _pipeline.ExecuteAsync(async cancellationToken =>
         {
             Uri downloadLink;
 
+            // Afterburn: a retry must start from a clean output, not append a second copy.
+            if (output.CanSeek)
+            {
+                output.Position = startPosition;
+                output.SetLength(startPosition);
+            }
+
             using (var msg = await CreateMessage(installerInfo.DownloadLink, cancellationToken))
             using (var response = await _client.SendAsync(msg, cancellationToken: cancellationToken))
             {
+                response.EnsureSuccessStatusCode();
                 var installerResponse = await response.Content.ReadFromJsonAsync<InstallerResponse>(_jsonSerializerOptions, cancellationToken: cancellationToken);
                 if (installerResponse is null) throw new JsonException("Failed to get installer");
                 downloadLink = new Uri(installerResponse.DownloadLink);
             }
 
             using (var msg = await CreateMessage(downloadLink, cancellationToken))
-            using (var response = await _client.SendAsync(msg, cancellationToken: cancellationToken))
+            using (var response = await _client.SendAsync(msg, HttpCompletionOption.ResponseHeadersRead, cancellationToken: cancellationToken))
             {
+                response.EnsureSuccessStatusCode();
                 await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken: cancellationToken);
                 await CopyArchive(stream, output, cancellationToken);
             }
@@ -315,17 +336,26 @@ internal class Client : IClient
         var buffer = new Memory<byte>(array: new byte[bufferSize.Value]);
 
         var found = false;
+        // Afterburn: keep the last 3 bytes of each read, so a ZIP header split across two reads is still
+        // found, and only write the bytes that were actually read (not the stale rest of the buffer).
+        var carried = 0;
 
         while (true)
         {
-            var numRead = await input.ReadAsync(buffer, cancellationToken: cancellationToken);
+            var numRead = await input.ReadAsync(buffer[carried..], cancellationToken: cancellationToken);
             if (numRead <= 0) break;
 
-            var span = buffer.Span.Slice(start: 0, length: numRead);
-            if (!ContainsZipArchiveHeader(span, out var index)) continue;
+            var length = carried + numRead;
+            var span = buffer.Span.Slice(start: 0, length: length);
+            if (!ContainsZipArchiveHeader(span, out var index))
+            {
+                carried = Math.Min(3, length);
+                buffer.Slice(length - carried, carried).CopyTo(buffer);
+                continue;
+            }
 
             found = true;
-            await output.WriteAsync(buffer[index..], cancellationToken: cancellationToken);
+            await output.WriteAsync(buffer[index..length], cancellationToken: cancellationToken);
             break;
         }
 
@@ -353,7 +383,7 @@ internal class Client : IClient
     {
         return await _pipeline.ExecuteAsync(async token =>
         {
-            var msg = await CreateMessage(new Uri($"https://content-system.gog.com/products/{productId}/os/{os}/builds?generation=2"), CancellationToken.None);
+            using var msg = await CreateMessage(new Uri($"https://content-system.gog.com/products/{productId}/os/{os}/builds?generation=2"), token);
             using var response = await _client.SendAsync(msg, token);
             if (!response.IsSuccessStatusCode)
             {
@@ -475,9 +505,10 @@ internal class Client : IClient
     /// </summary>
     private async Task<SecureUrl> GetSecureUrl(ProductId productId, CancellationToken token)
     {
+        // Afterburn: wait outside the try, so a cancelled wait doesn't release a lock we never took.
+        await _secureUrlLock.WaitAsync(token);
         try
         {
-            await _secureUrlLock.WaitAsync(token);
             if (_secureUrls.TryGetValue(productId, out var found))
             {
                 // Later we can make this more advanced, but for now just return the first one
@@ -492,7 +523,7 @@ internal class Client : IClient
                 }
             }
 
-            var request = await CreateMessage(new Uri($"https://content-system.gog.com/products/{productId.Value}/secure_link?generation=2&_version=2&path=/"), token);
+            using var request = await CreateMessage(new Uri($"https://content-system.gog.com/products/{productId.Value}/secure_link?generation=2&_version=2&path=/"), token);
 
             using var response = await _client.SendAsync(request, token);
             if (response.StatusCode == HttpStatusCode.Forbidden)
@@ -507,8 +538,10 @@ internal class Client : IClient
                 throw new Exception("Failed to deserialize the secure URLs response.");
 
             var sorted = urls.Urls.OrderBy(s => s.Priority).ToArray();
+            if (sorted.Length == 0)
+                throw new Exception($"GOG returned no download servers for {productId}.");
             _secureUrls[productId] = sorted;
-            return sorted.First();
+            return sorted[0];
         }
         finally
         {
@@ -538,6 +571,11 @@ internal class Client : IClient
     /// <param name="url"></param>
     public void AuthUrl(NXMGogAuthUrl url)
     {
+        if (!_waitingForAuthUrl)
+        {
+            _logger.LogWarning("Ignoring a GOG sign-in link because no GOG sign-in was started");
+            return;
+        }
         _authUrls.Writer.TryWrite(url);
     }
 }

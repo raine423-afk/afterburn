@@ -55,18 +55,6 @@ public sealed class JsonStorageBackend : IStorageBackend
         return _configDirectory.Combine(fileName);
     }
 
-    private void Serialize<T>(Stream stream ,T value) where T : class
-    {
-        try
-        {
-            JsonSerializer.Serialize(stream, value, _jsonOptions.Value);
-        }
-        catch (Exception e)
-        {
-            _logger.LogError(e, "Exception while serializing `{Type}` with value `{Value}`", typeof(T), value);
-        }
-    }
-
     private T? Deserialize<T>(string json) where T : class
     {
         try
@@ -85,8 +73,44 @@ public sealed class JsonStorageBackend : IStorageBackend
     public void Save<T>(T value, string? key) where T : class, ISettings, new()
     {
         var configPath = GetConfigPath<T>(key);
-        using var stream = configPath.Open(FileMode.Create, FileAccess.ReadWrite, FileShare.None);
-        Serialize(stream, value);
+
+        // Afterburn: write to a temporary file and swap it in, so a crash or a failed save mid-write can't
+        // leave an empty settings file behind (which reset that setting to its default on the next start).
+        var tempPath = configPath.Parent.Combine(configPath.FileName + ".tmp");
+        try
+        {
+            using (var stream = tempPath.Open(FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+            {
+                if (!TrySerialize(stream, value)) return;
+                if (stream is FileStream fileStream) fileStream.Flush(flushToDisk: true);
+                else stream.Flush();
+            }
+
+            tempPath.FileSystem.MoveFile(tempPath, configPath, true);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Couldn't save settings `{Type}`", typeof(T));
+        }
+        finally
+        {
+            try { if (tempPath.FileExists) tempPath.Delete(); }
+            catch { /* best effort */ }
+        }
+    }
+
+    private bool TrySerialize<T>(Stream stream, T value) where T : class
+    {
+        try
+        {
+            JsonSerializer.Serialize(stream, value, _jsonOptions.Value);
+            return true;
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Exception while serializing `{Type}` with value `{Value}`", typeof(T), value);
+            return false;
+        }
     }
 
     /// <inheritdoc/>

@@ -27,6 +27,32 @@ internal class ProcessRunner : IProcessRunner
         _logger.LogInformation("Using process log folder at {Path}", _processLogsFolder);
 
         _processLogsFolder.CreateDirectory();
+        PruneOldProcessLogs();
+    }
+
+    /// <summary>
+    /// Afterburn: every game or tool launch adds two log files here and nothing ever removed them.
+    /// Keep the newest ones and delete the rest.
+    /// </summary>
+    private void PruneOldProcessLogs()
+    {
+        const int keep = 60;
+        try
+        {
+            var old = _processLogsFolder.EnumerateFiles("*.log", false)
+                .OrderByDescending(f => f.FileInfo.LastWriteTimeUtc)
+                .Skip(keep)
+                .ToArray();
+            foreach (var file in old)
+            {
+                try { file.Delete(); }
+                catch (Exception e) { _logger.LogDebug(e, "Couldn't delete old process log {Path}", file); }
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogDebug(e, "Couldn't tidy the process log folder");
+        }
     }
 
     private string GetFileName(Command command)
@@ -79,7 +105,8 @@ internal class ProcessRunner : IProcessRunner
             // https://github.com/Nexus-Mods/NexusMods.App/issues/1905#issuecomment-2302486535
             command = command.WithStandardInputPipe(stdInPipe);
             if (command.StandardOutputPipe == PipeTarget.Null) command = command.WithStandardOutputPipe(PipeTarget.ToStream(Stream.Null));
-            if (command.StandardOutputPipe == PipeTarget.Null) command = command.WithStandardErrorPipe(PipeTarget.ToStream(Stream.Null));
+            // Afterburn: this checked the output pipe twice, so the error pipe was never given a sink.
+            if (command.StandardErrorPipe == PipeTarget.Null) command = command.WithStandardErrorPipe(PipeTarget.ToStream(Stream.Null));
             return command;
         }
 
@@ -120,11 +147,12 @@ internal class ProcessRunner : IProcessRunner
         process.Exited += (_, _) =>
         {
             hasExited = true;
-            tcs.SetResult();
+            // Afterburn: TrySet, so a failed kill followed by the exit can't throw inside the event handler.
+            tcs.TrySetResult();
             process.Dispose();
         };
         
-        cancellationToken.Register(() =>
+        var registration = cancellationToken.Register(() =>
         {
             if (hasExited) return;
             try
@@ -135,7 +163,7 @@ internal class ProcessRunner : IProcessRunner
             catch (Exception e)
             {
                 _logger.LogError(e, "Failed to kill process `{Process}`", process.StartInfo.FileName);
-                tcs.SetException(e);
+                tcs.TrySetException(e);
             }
         });
 
@@ -147,9 +175,10 @@ internal class ProcessRunner : IProcessRunner
         catch (Exception e)
         {
             _logger.LogError(e, "Failed to start process `{Process}`", process.StartInfo.FileName);
-            tcs.SetException(e);
+            tcs.TrySetException(e);
         }
 
+        tcs.Task.ContinueWith(static (_, state) => ((CancellationTokenRegistration)state!).Dispose(), registration, TaskScheduler.Default);
         return tcs.Task; 
     }
 }
