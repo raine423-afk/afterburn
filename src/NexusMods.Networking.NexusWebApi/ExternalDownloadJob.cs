@@ -51,7 +51,9 @@ public record ExternalDownloadJob : HttpDownloadJob
             DownloadPageUri = uri,
             Destination = tempFileManager.CreateFile(),
             Uri = uri,
-            Client = provider.GetRequiredService<HttpClient>(),
+            // Afterburn: external links come from collection authors, so use the client that only reaches the
+            // public internet and checks every redirect.
+            Client = provider.GetRequiredService<PublicWebHttpClient>().Client,
         };
 
         return monitor.Begin<ExternalDownloadJob, AbsolutePath>(job);

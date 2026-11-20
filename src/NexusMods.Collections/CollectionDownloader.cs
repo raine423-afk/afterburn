@@ -20,6 +20,7 @@ using NexusMods.MnemonicDB.Abstractions.ElementComparers;
 using NexusMods.MnemonicDB.Abstractions.IndexSegments;
 using NexusMods.MnemonicDB.Abstractions.Query;
 using NexusMods.MnemonicDB.Abstractions.TxFunctions;
+using NexusMods.Networking.HttpDownloader;
 using NexusMods.Networking.NexusWebApi;
 using NexusMods.Paths;
 using NexusMods.Sdk;
@@ -47,6 +48,8 @@ public class CollectionDownloader
     private readonly ILibraryService _libraryService;
     private readonly IOSInterop _osInterop;
     private readonly HttpClient _httpClient;
+    // Afterburn: for the collection author's external links; only reaches the public internet, checks redirects.
+    private readonly HttpClient _publicWebClient;
     private readonly IJobMonitor _jobMonitor;
     private readonly IGameDomainToGameIdMappingCache _mappingCache;
 
@@ -64,6 +67,7 @@ public class CollectionDownloader
         _libraryService = serviceProvider.GetRequiredService<ILibraryService>();
         _osInterop = serviceProvider.GetRequiredService<IOSInterop>();
         _httpClient = serviceProvider.GetRequiredService<HttpClient>();
+        _publicWebClient = serviceProvider.GetRequiredService<PublicWebHttpClient>().Client;
         _jobMonitor = serviceProvider.GetRequiredService<IJobMonitor>();
         _mappingCache = serviceProvider.GetRequiredService<IGameDomainToGameIdMappingCache>();
     }
@@ -104,7 +108,7 @@ public class CollectionDownloader
 
         // Afterburn: a collection's external link is written by the collection author. Only fetch it
         // automatically from a public web address, never from this PC or the local network.
-        if (!IsPublicWebUri(download.Uri))
+        if (!PublicWebAddress.IsPublicUri(download.Uri))
         {
             _logger.LogWarning("Not downloading `{Uri}` automatically: it isn't a public http(s) address", download.Uri);
             return DirectDownloadResult.Unable;
@@ -113,7 +117,7 @@ public class CollectionDownloader
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Head, download.Uri);
-            using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken: cancellationToken);
+            using var response = await _publicWebClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken: cancellationToken);
             if (!response.IsSuccessStatusCode) return DirectDownloadResult.Unable;
 
             var contentType = response.Content.Headers.ContentType?.MediaType;
@@ -146,42 +150,6 @@ public class CollectionDownloader
             _logger.LogError(e, "Exception while checking if `{Uri}` can be downloaded directly", download.Uri);
             return DirectDownloadResult.Unable;
         }
-    }
-
-    /// <summary>
-    /// Afterburn: true when the address is http(s) and its host is not this machine or a private/local network address.
-    /// </summary>
-    internal static bool IsPublicWebUri(Uri uri)
-    {
-        if (!uri.IsAbsoluteUri) return false;
-        if (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp) return false;
-
-        var host = uri.IdnHost.TrimEnd('.');
-        if (host.Length == 0) return false;
-        if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
-            || host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase)
-            || host.EndsWith(".local", StringComparison.OrdinalIgnoreCase)
-            || host.EndsWith(".internal", StringComparison.OrdinalIgnoreCase)
-            || !host.Contains('.') && !host.Contains(':'))
-            return false;
-
-        if (!System.Net.IPAddress.TryParse(host.Trim('[', ']'), out var ip)) return true;
-        if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
-        if (System.Net.IPAddress.IsLoopback(ip)) return false;
-
-        if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-        {
-            var b = ip.GetAddressBytes();
-            return !(b[0] == 0 || b[0] == 10 || b[0] == 127
-                     || (b[0] == 100 && b[1] >= 64 && b[1] <= 127)
-                     || (b[0] == 169 && b[1] == 254)
-                     || (b[0] == 172 && b[1] >= 16 && b[1] <= 31)
-                     || (b[0] == 192 && b[1] == 168)
-                     || b[0] >= 224);
-        }
-
-        return !(ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || ip.IsIPv6UniqueLocal || ip.IsIPv6Multicast
-                 || ip.Equals(System.Net.IPAddress.IPv6None) || ip.Equals(System.Net.IPAddress.IPv6Any));
     }
 
     /// <summary>

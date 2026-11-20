@@ -13,14 +13,17 @@ public static class Services
     /// </summary>
     public static IServiceCollection AddHttpDownloader(this IServiceCollection services)
     {
-        return services.AddSingleton<HttpClient>(_ =>
-        {
-            var client = BuildClient();
-            return client;
-        });
+        return services
+            .AddSingleton<HttpClient>(_ =>
+            {
+                var client = BuildClient();
+                return client;
+            })
+            // Afterburn: a separate client for third-party links that only reaches the public internet.
+            .AddSingleton<PublicWebHttpClient>(_ => new PublicWebHttpClient(BuildClient(publicWebOnly: true)));
     }
 
-    private static HttpClient BuildClient()
+    private static HttpClient BuildClient(bool publicWebOnly = false)
     {
         var pipeline = new ResiliencePipelineBuilder<HttpResponseMessage>()
             .AddRetry(new HttpRetryStrategyOptions
@@ -32,9 +35,13 @@ public static class Services
             })
             .Build();
 
+        HttpMessageHandler innerHandler = publicWebOnly
+            ? new PublicRedirectHandler { InnerHandler = PublicWebHttpClient.CreateSocketsHandler() }
+            : new SocketsHttpHandler();
+
         HttpMessageHandler handler = new ResilienceHandler(pipeline)
         {
-            InnerHandler = new SocketsHttpHandler(),
+            InnerHandler = innerHandler,
         };
 
         var client = new HttpClient(handler)
