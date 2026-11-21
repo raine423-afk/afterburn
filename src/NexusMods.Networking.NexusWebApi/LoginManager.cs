@@ -101,20 +101,7 @@ public sealed class LoginManager : IDisposable, ILoginManager
         // Afterburn: a personal API key (NEXUS_API_KEY) has no OAuth token to watch, so verify it once at startup.
         if (_msgFactory is ApiKeyMessageFactory)
         {
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    var userInfo = await Verify(CancellationToken.None);
-                    if (userInfo is null) return;
-                    _cachedUserInfo.Store(userInfo);
-                    _userInfo.OnNext(userInfo);
-                }
-                catch (Exception e)
-                {
-                    _logger.LogWarning(e, "Failed to verify the Nexus Mods personal API key");
-                }
-            });
+            _ = Task.Run(VerifyApiKeyUntilItWorks);
         }
 
         // Set up periodic refresh to prevent cache expiry
@@ -124,6 +111,47 @@ public sealed class LoginManager : IDisposable, ILoginManager
             {
                 await TryRefreshUserInfoSafely(cancellationToken, "periodic update");
             }, configureAwait: false);
+    }
+
+    /// <summary>
+    /// Afterburn: checks the saved personal API key at startup. If Nexus is busy (429, a timeout, a server error or
+    /// no internet), it keeps retrying with growing pauses instead of giving up, which used to leave Afterburn
+    /// logged out (and Update doing nothing) for the whole session. It stops when the key works, or when Nexus
+    /// says the key itself is wrong.
+    /// </summary>
+    private async Task VerifyApiKeyUntilItWorks()
+    {
+        var pause = TimeSpan.FromSeconds(30);
+        var maxPause = TimeSpan.FromMinutes(10);
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                _cachedUserInfo.Evict();
+                var userInfo = await Verify(CancellationToken.None);
+                if (userInfo is not null)
+                {
+                    _cachedUserInfo.Store(userInfo);
+                    _userInfo.OnNext(userInfo);
+                    if (attempt > 1) _logger.LogInformation("Logged in to Nexus Mods with the personal API key on attempt {Attempt}", attempt);
+                    return;
+                }
+                return; // no key saved
+            }
+            catch (HttpRequestException e) when (e.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+            {
+                _logger.LogWarning("Nexus Mods didn't accept the saved personal API key ({Status}); log in again with a new key", e.StatusCode);
+                return;
+            }
+            catch (Exception e)
+            {
+                _logger.LogWarning("Couldn't check the personal API key with Nexus Mods yet (attempt {Attempt}: {Reason}); trying again in {Seconds} s",
+                    attempt, e is HttpRequestException { StatusCode: not null } h ? $"error {(int)h.StatusCode.Value}" : e.GetType().Name, (int)pause.TotalSeconds);
+            }
+
+            await Task.Delay(pause);
+            pause = TimeSpan.FromTicks(Math.Min(pause.Ticks * 2, maxPause.Ticks));
+        }
     }
 
     private CachedObject<UserInfo> _cachedUserInfo = new(TimeSpan.FromMinutes(CacheExpiryMinutes));

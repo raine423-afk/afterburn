@@ -83,7 +83,19 @@ public static class ApiKeyStore
             if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
                 return (false, "Nexus Mods didn't accept that key. Copy it again from your API page and try again.");
             if (!response.IsSuccessStatusCode)
+            {
+                // Afterburn: Nexus is busy (e.g. 429 after a big collection download) and can't say whether the
+                // key is right. Save it anyway; Afterburn checks it again by itself until Nexus answers, and says
+                // so if the key turns out to be wrong.
+                if ((int)response.StatusCode == 429 || (int)response.StatusCode >= 500)
+                    return SaveUnchecked(key, $"Nexus Mods is busy right now (error {(int)response.StatusCode}), so the key couldn't be checked yet. It has been saved: close Afterburn and open it again, and it will log in by itself as soon as Nexus Mods answers (this can take a few minutes).");
                 return (false, $"Nexus Mods couldn't check the key right now (error {(int)response.StatusCode}). Try again in a few minutes.");
+            }
+        }
+        catch (Exception e) when (e is TaskCanceledException or HttpRequestException)
+        {
+            // Timed out or no answer: same as busy.
+            return SaveUnchecked(key, "Nexus Mods didn't answer in time, so the key couldn't be checked yet. It has been saved: close Afterburn and open it again, and it will log in by itself as soon as Nexus Mods answers.");
         }
         catch (Exception)
         {
@@ -102,6 +114,18 @@ public static class ApiKeyStore
         }
 
         return (true, "API key saved. Close Afterburn completely (check the tray icon too) and open it again to finish logging in.");
+    }
+
+    private static (bool Success, string Message) SaveUnchecked(string key, string message)
+    {
+        if (!TryWriteFile(key))
+            return (false, "Nexus Mods is busy right now and Afterburn couldn't save the key either. Try again in a few minutes.");
+        lock (Gate)
+        {
+            _loaded = true;
+            _cached = key;
+        }
+        return (true, message);
     }
 
     // Afterburn: on Linux / Steam Deck there is no DPAPI. The key is kept in a file only the current user can read
