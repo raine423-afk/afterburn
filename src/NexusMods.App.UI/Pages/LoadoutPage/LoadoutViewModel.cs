@@ -895,16 +895,32 @@ public class LoadoutViewModel : APageViewModel<ILoadoutViewModel>, ILoadoutViewM
 
     private async ValueTask UpdateCollectionInfo(ManagedCollectionLoadoutGroup.ReadOnly managedCollectionLoadoutGroup, CancellationToken cancellationToken)
     {
-        var graphQlResult = await _nexusModsLibrary.GetLastPublishedRevisionNumber(managedCollectionLoadoutGroup.Collection, cancellationToken);
+        // Afterburn: runs automatically when the loadout page opens. A network error or a collection Nexus no
+        // longer returns used to pop up an "Unhandled Exception"; just leave the stored value as it is.
+        Optional<RevisionNumber> lastPublishedRevisionNumber;
+        try
+        {
+            var graphQlResult = await _nexusModsLibrary.GetLastPublishedRevisionNumber(managedCollectionLoadoutGroup.Collection, cancellationToken);
+            if (!graphQlResult.TryGetData(out lastPublishedRevisionNumber)) return;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception)
+        {
+            return;
+        }
 
-        // TODO: handle errors
-        var lastPublishedRevisionNumber = graphQlResult.AssertHasData();
+        if (!lastPublishedRevisionNumber.HasValue) return;
+        // Only write when it changed, so saving it can't set off another refresh of the same value.
+        if (managedCollectionLoadoutGroup.LastPublishedRevisionNumber.HasValue
+            && managedCollectionLoadoutGroup.LastPublishedRevisionNumber.Value == lastPublishedRevisionNumber.Value) return;
 
         using var tx = _connection.BeginTransaction();
-        if (lastPublishedRevisionNumber.HasValue)
-        {
-            tx.Add(managedCollectionLoadoutGroup, ManagedCollectionLoadoutGroup.LastPublishedRevisionNumber, lastPublishedRevisionNumber.Value);
-        }
+        tx.Add(managedCollectionLoadoutGroup, ManagedCollectionLoadoutGroup.LastPublishedRevisionNumber, lastPublishedRevisionNumber.Value);
+        // Afterburn: this transaction was never committed, so the newest published revision was never saved.
+        await tx.Commit();
     }
 
     private static IEnumerable<LoadoutItemId> GetLoadoutItemIds(CompositeItemModel<EntityId> itemModel)
