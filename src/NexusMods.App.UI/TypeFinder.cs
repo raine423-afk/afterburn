@@ -1,4 +1,5 @@
 using NexusMods.App.UI.Pages.Storage;
+using NexusMods.App.UI.Pages.Issues;
 using NexusMods.Abstractions.Serialization.ExpressionGenerator;
 using NexusMods.App.UI.Pages;
 using NexusMods.App.UI.Pages.Changelog;
@@ -35,6 +36,7 @@ internal class TypeFinder : ITypeFinder
         typeof(SettingsPageContext),
         typeof(ChangelogPageContext),
         typeof(StoragePageContext),
+        typeof(IssuesPageContext),
         typeof(TextEditorPageContext),
         typeof(MyLoadoutsPageContext),
         typeof(LoadoutGroupFilesPageContext),

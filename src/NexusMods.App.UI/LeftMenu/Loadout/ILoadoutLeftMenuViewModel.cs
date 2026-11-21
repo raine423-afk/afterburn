@@ -20,6 +20,9 @@ public interface ILoadoutLeftMenuViewModel : ILeftMenuViewModel
 
     /// <summary>Afterburn: the Storage page.</summary>
     public ILeftMenuItemViewModel LeftMenuItemStorage { get; }
+
+    /// <summary>Afterburn: the Issues page.</summary>
+    public ILeftMenuItemViewModel LeftMenuItemIssues { get; }
     
     public ILeftMenuItemViewModel? LeftMenuItemExternalChanges { get; }
 }

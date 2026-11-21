@@ -41,6 +41,12 @@ public class LoadoutLeftMenuDesignViewModel : AViewModel<ILoadoutLeftMenuViewMod
         Icon = IconValues.FolderEditOutline,
     };
 
+    public ILeftMenuItemViewModel LeftMenuItemIssues { get; } = new LeftMenuItemDesignViewModel
+    {
+        Text = new StringComponent("Issues"),
+        Icon = IconValues.WarningAmber,
+    };
+
     public ILeftMenuItemViewModel LeftMenuItemExternalChanges { get; } = new LeftMenuItemDesignViewModel
     {
         Text = new StringComponent(Language.LoadoutLeftMenuViewModel_External_Changes),
