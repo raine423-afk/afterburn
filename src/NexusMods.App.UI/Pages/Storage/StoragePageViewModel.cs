@@ -192,6 +192,20 @@ public class StoragePageViewModel : APageViewModel<IStoragePageViewModel>, IStor
 
     private async Task RefreshAsync()
     {
+        // Afterburn: this runs every time the page opens; a failure must show on the page, not as a crash popup.
+        try
+        {
+            await RefreshCoreAsync();
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Couldn't refresh the Storage page");
+            StorageSummary = "Afterburn couldn't read its storage details just now. Open the page again to retry.";
+        }
+    }
+
+    private async Task RefreshCoreAsync()
+    {
         var (archiveBytes, archiveCount, freeText) = await Task.Run(() =>
         {
             var (b, c) = MeasureArchives();

@@ -431,12 +431,28 @@ public sealed class CollectionDownloadViewModel : APageViewModel<ICollectionDown
 
                 R3.Observable.Return(_revision)
                     .ObserveOnThreadPool()
-                    .SelectAwait((revision, cancellationToken) => nexusModsLibrary.GetLastPublishedRevisionNumber(revision.Collection, cancellationToken))
-                    .ObserveOnUIThreadDispatcher()
-                    .Subscribe(this, static (graphQlResult, self) =>
+                    .SelectAwait(async (revision, cancellationToken) =>
+                    {
+                        // Afterburn: this runs every time a collection page opens. Being offline, or the collection
+                        // being hidden or removed on Nexus, used to pop up an "Unhandled Exception". Treat it as
+                        // "no newer revision known" instead.
+                        try
                         {
-                            // TODO: handle errors
-                            var lastPublishedRevisionNumber = graphQlResult.AssertHasData();
+                            var result = await nexusModsLibrary.GetLastPublishedRevisionNumber(revision.Collection, cancellationToken);
+                            return result.TryGetData(out var number) ? number : Optional<RevisionNumber>.None;
+                        }
+                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                        {
+                            throw;
+                        }
+                        catch (Exception)
+                        {
+                            return Optional<RevisionNumber>.None;
+                        }
+                    })
+                    .ObserveOnUIThreadDispatcher()
+                    .Subscribe(this, static (lastPublishedRevisionNumber, self) =>
+                        {
                             if (!lastPublishedRevisionNumber.HasValue)
                             {
                                 self.IsUpdateAvailable.Value = false;

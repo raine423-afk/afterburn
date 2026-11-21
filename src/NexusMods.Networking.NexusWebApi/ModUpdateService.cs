@@ -125,7 +125,17 @@ public class ModUpdateService : IModUpdateService, IDisposable
                     affectedModPage.Add(change.Current.ModPageMetadataId);
                 
                 var started = System.Diagnostics.Stopwatch.GetTimestamp();
-                lock (_notifyLock) NotifyForUpdatesOfSpecificModPages(affectedModPage);
+                // Afterburn: this runs on a background thread with no error handler, so an exception here
+                // would end the app (and would stop update badges for the rest of the session). Log instead.
+                try
+                {
+                    lock (_notifyLock) NotifyForUpdatesOfSpecificModPages(affectedModPage);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e, "Couldn't work out mod updates for {Count} mod page(s)", affectedModPage.Count);
+                    return;
+                }
                 var took = System.Diagnostics.Stopwatch.GetElapsedTime(started);
                 if (took.TotalMilliseconds > 200)
                     _logger.LogInformation("Checked {Count} mod page(s) for updates in {Milliseconds} ms", affectedModPage.Count, (int)took.TotalMilliseconds);
