@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Linq;
 using System.Diagnostics.CodeAnalysis;
 using DynamicData.Kernel;
 using JetBrains.Annotations;
@@ -9,6 +10,12 @@ namespace NexusMods.Networking.NexusWebApi.Errors;
 
 file static class Helper
 {
+    internal static string DescribeErrors(KeyValuePair<ErrorCode, IGraphQlError>[] errors)
+    {
+        if (errors.Length == 0) return "(none)";
+        return string.Join("; ", errors.Select(e => $"{e.Key}: {e.Value.Message}"));
+    }
+
     internal static KeyValuePair<ErrorCode, IGraphQlError>[] ToErrors(IGraphQlError error)
     {
         return [new KeyValuePair<ErrorCode, IGraphQlError>(error.Code, error)];
@@ -60,7 +67,8 @@ public class GraphQlResult<TData> : IGraphQlResult<TData>
     public TData AssertHasData()
     {
         Debug.Assert(HasData, "Result should have data when this method is called, use TryGetData instead if you can't guarantee it");
-        if (!HasData) throw new InvalidOperationException($"Expected the result to contain data but it has {Errors.Length} errors instead");
+        // Afterburn: say what the errors were, not just how many.
+        if (!HasData) throw new InvalidOperationException($"Expected the result to contain data but it has {Errors.Length} errors instead: {Helper.DescribeErrors(Errors)}");
         return _data.Value;
     }
 

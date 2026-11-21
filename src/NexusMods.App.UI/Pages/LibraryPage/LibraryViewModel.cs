@@ -838,7 +838,21 @@ After asking design, we're choosing to simply open the mod page for now.
     // Note(sewer): ValueTask because of R3 constraints with ReactiveCommand API
     private async ValueTask RefreshUpdates(CancellationToken token) 
     {
-        await _modUpdateService.CheckAndUpdateModPages(token, notify: true);
+        // Afterburn: this runs automatically when the Library opens, so a failed check (Nexus down, a bad
+        // mod page, no internet) must not surface as an "Unhandled Exception" popup. Log it instead.
+        try
+        {
+            await _modUpdateService.CheckAndUpdateModPages(token, notify: true);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // Page closed or check cancelled.
+        }
+        catch (Exception e)
+        {
+            _serviceProvider.GetRequiredService<ILogger<LibraryViewModel>>()
+                .LogWarning(e, "The mod update check failed; will try again next time");
+        }
     }
 
     private async ValueTask InstallItems(LibraryItemId[] ids, LoadoutItemGroupId targetLoadoutGroup, bool useAdvancedInstaller, CancellationToken cancellationToken)
