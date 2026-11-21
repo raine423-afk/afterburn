@@ -47,6 +47,7 @@ public class LoadoutLeftMenuViewModel : AViewModel<ILoadoutLeftMenuViewModel>, I
     public ILeftMenuItemViewModel LeftMenuItemNewCollection { get; }
     public ILeftMenuItemViewModel LeftMenuItemHealthCheck { get; }
     public ILeftMenuItemViewModel LeftMenuItemStorage { get; }
+    public ILeftMenuItemViewModel LeftMenuItemIssues { get; }
     [Reactive] public ILeftMenuItemViewModel? LeftMenuItemExternalChanges { get; private set; }
     
     [Reactive] public bool HasSingleCollection { get; private set; } = true;
@@ -249,6 +250,25 @@ public class LoadoutLeftMenuViewModel : AViewModel<ILoadoutLeftMenuViewModel>, I
             Text = new StringComponent("Storage"),
             Icon = IconValues.FolderEditOutline,
             ToolTip = new StringComponent("How much disk space Afterburn uses, clean-up, and game-folder files Afterburn didn't install"),
+        };
+
+        // Afterburn: Issues (full details on file conflicts, Health Check results and mod-log errors)
+        LeftMenuItemIssues = new LeftMenuItemViewModel(
+            workspaceController,
+            WorkspaceId,
+            new PageData
+            {
+                FactoryId = NexusMods.App.UI.Pages.Issues.IssuesPageFactory.StaticId,
+                Context = new NexusMods.App.UI.Pages.Issues.IssuesPageContext
+                {
+                    LoadoutId = loadoutContext.LoadoutId,
+                },
+            }
+        )
+        {
+            Text = new StringComponent("Issues"),
+            Icon = IconValues.WarningAmber,
+            ToolTip = new StringComponent("Full details on file conflicts, Health Check results and errors in the game's mod logs"),
         };
 
         // Apply Control

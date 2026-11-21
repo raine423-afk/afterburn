@@ -1,0 +1,113 @@
+<reactive:ReactiveUserControl
+    x:TypeArguments="local:IIssuesPageViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:reactive="http://reactiveui.net"
+    xmlns:local="using:NexusMods.App.UI.Pages.Issues"
+    mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+    x:CompileBindings="False"
+    x:Class="NexusMods.App.UI.Pages.Issues.IssuesPageView">
+
+    <!-- Afterburn: full details about file conflicts, Health Check problems and errors in the game's mod logs. -->
+    <Grid RowDefinitions="Auto,*" Margin="24,16,24,8">
+
+        <StackPanel Grid.Row="0" Spacing="8" Margin="0,0,0,8">
+            <TextBlock Text="Issues" FontSize="20" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" />
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBox Grid.Column="0" Text="{Binding SearchText}" Watermark="Search mods, file paths or messages…" Margin="0,0,8,0" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <Button Content="Refresh" Command="{Binding RefreshCommand}" />
+                    <Button Content="Fix conflicts automatically" Command="{Binding AutoResolveCommand}"
+                            ToolTip.Tip="Re-runs Afterburn's automatic rules for which mod should win each conflicting file" />
+                    <Button Content="Copy report" Command="{Binding CopyReportCommand}" />
+                    <Button Content="Save report" Command="{Binding SaveReportCommand}"
+                            ToolTip.Tip="Saves the full report as a text file in your Downloads folder" />
+                </StackPanel>
+            </Grid>
+            <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Opacity="0.75" />
+        </StackPanel>
+
+        <TabControl Grid.Row="1">
+
+            <TabItem Header="{Binding ModsHeader}">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Opacity="0.75" Margin="0,8"
+                               Text="Mods that share files with other mods. When two mods contain the same file, only one copy can be used: the mod lower in the conflict order wins. Change the order on the File Conflicts page." />
+                    <ListBox Grid.Row="1" ItemsSource="{Binding VisibleMods}" Background="Transparent">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Spacing="2" Margin="0,4">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Counts}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Opponents}" TextWrapping="Wrap" Opacity="0.75" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="{Binding ConflictsHeader}">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Opacity="0.75" Margin="0,8"
+                               Text="Every file that more than one enabled mod provides, which copy the game gets, and which copies are hidden." />
+                    <ListBox Grid.Row="1" ItemsSource="{Binding VisibleConflicts}" Background="Transparent">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Spacing="2" Margin="0,4">
+                                    <SelectableTextBlock Text="{Binding Path}" FontWeight="SemiBold" TextWrapping="Wrap" FontFamily="Consolas,Menlo,monospace" />
+                                    <TextBlock Text="{Binding WinnerText}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding LosersText}" TextWrapping="Wrap" Opacity="0.75" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="{Binding HealthHeader}">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Opacity="0.75" Margin="0,8"
+                               Text="Everything Health Check found, with the full explanation for each one." />
+                    <ListBox Grid.Row="1" ItemsSource="{Binding VisibleHealth}" Background="Transparent">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Spacing="2" Margin="0,6">
+                                    <TextBlock Text="{Binding SeverityText}" FontWeight="SemiBold" Foreground="{Binding SeverityBrush}" />
+                                    <SelectableTextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <SelectableTextBlock Text="{Binding Details}" TextWrapping="Wrap" Opacity="0.85" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="{Binding LogsHeader}">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock Grid.Row="0" TextWrapping="Wrap" Opacity="0.75" Margin="0,8"
+                               Text="Errors and warnings written by the game's mod tools (RED4ext, redscript, Cyber Engine Tweaks, ArchiveXL, TweakXL, REDmod and others) the last time the game ran. Start the game once after changing mods to refresh these." />
+                    <ListBox Grid.Row="1" ItemsSource="{Binding VisibleLogs}" Background="Transparent">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Spacing="2" Margin="0,4">
+                                    <TextBlock TextWrapping="Wrap">
+                                        <Run Text="{Binding LevelText}" FontWeight="SemiBold" Foreground="{Binding LevelBrush}" />
+                                        <Run Text=" · " />
+                                        <Run Text="{Binding Source}" FontWeight="SemiBold" />
+                                        <Run Text=" · " />
+                                        <Run Text="{Binding FileText}" />
+                                    </TextBlock>
+                                    <SelectableTextBlock Text="{Binding Line}" TextWrapping="Wrap" FontFamily="Consolas,Menlo,monospace" Opacity="0.85" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</reactive:ReactiveUserControl>
