@@ -93,16 +93,11 @@ public static class RunUpdateCheck
             }
             catch (Exception e)
             {
-                if (isUndetermined)
-                {
-                    var id = mixin.GetModPageId();
-                    logger.LogError(e, "Failed to update metadata for Mod (GameID: {Page}, ModId: {ModId})", id.GameId, id.ModId);
-                }
-                else
-                {
-                    // Rethrow for non-undetermined items as these should be truly exceptional
-                    throw;
-                }
+                // Afterburn: one mod page that fails (removed, hidden or a Nexus hiccup) used to abort the whole
+                // update check and pop up an "Unhandled Exception". Log it and carry on with the other pages.
+                var id = mixin.GetModPageId();
+                logger.LogWarning(e, "Couldn't update metadata for Mod (GameID: {Page}, ModId: {ModId}){Kind}",
+                    id.GameId, id.ModId, isUndetermined ? " (may have been removed)" : "");
             }
             finally
             {
@@ -137,8 +132,10 @@ public static class RunUpdateCheck
         var uid = mixin.GetModPageId();
 
         var modResult = await graphQlClient.QueryMod(uid.ModId, uid.GameId, cancellationToken);
-        // TODO: handle errors
-        var mod = modResult.AssertHasData();
+        // Afterburn: Nexus returns no data for a mod page that was removed, hidden or is under moderation.
+        // Skip that page quietly instead of throwing.
+        if (!modResult.TryGetData(out var mod))
+            return;
 
         mod.Resolve(db, tx, setFilesTimestamp: true);
 
@@ -146,8 +143,8 @@ public static class RunUpdateCheck
         var pageEntityId = mixin.GetModPageEntityId();
 
         var modFilesResult = await graphQlClient.QueryModFiles(uid.ModId, uid.GameId, cancellationToken: cancellationToken);
-        // TODO: handle errors
-        var modFiles = modFilesResult.AssertHasData();
+        if (!modFilesResult.TryGetData(out var modFiles))
+            return;
 
         foreach (var modFile in modFiles)
         {
