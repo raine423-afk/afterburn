@@ -183,6 +183,34 @@ public class Program
         return SingleInstanceResult.Exit;
     }
 
+    private static bool AnyOtherAfterburnProcess()
+    {
+        try
+        {
+            // Give a just-killed process a moment to disappear.
+            for (var attempt = 0; attempt < 20; attempt++)
+            {
+                using var current = Process.GetCurrentProcess();
+                var others = Process.GetProcessesByName(current.ProcessName);
+                var any = false;
+                foreach (var other in others)
+                {
+                    using (other)
+                    {
+                        if (other.Id != current.Id && !other.HasExited) any = true;
+                    }
+                }
+                if (!any) return false;
+                Thread.Sleep(250);
+            }
+            return true;
+        }
+        catch
+        {
+            return true; // can't tell; be safe and don't start another
+        }
+    }
+
     private static bool OtherAfterburnRunningLongerThan(TimeSpan age)
     {
         try
@@ -348,6 +376,18 @@ public class Program
                 catch { /* never block startup on this check */ }
             }
         }
+        var exitCode = RunWithHost(startupMode, loggingSettings, experimentalSettings, gameLocatorSettings, args);
+
+        // Afterburn: everything is saved and disposed by now. If a leftover non-background thread would keep the
+        // process alive with no window (it showed in Task Manager after closing), end it here.
+        try { _logger?.LogInformation("Afterburn closed"); NLog.LogManager.Flush(TimeSpan.FromSeconds(2)); }
+        catch { /* best effort */ }
+        Environment.Exit(exitCode);
+        return exitCode;
+    }
+
+    private static int RunWithHost(StartupMode startupMode, LoggingSettings loggingSettings, ExperimentalSettings experimentalSettings, GameLocatorSettings gameLocatorSettings, string[] args)
+    {
         using var host = BuildHost(
             startupMode,
             loggingSettings,
@@ -455,10 +495,47 @@ public class Program
         }
         finally
         {
+            // Afterburn: closing the window could leave Afterburn running in the background forever: shutdown got
+            // stuck disposing a service, or a leftover thread kept the process alive. Give the normal shutdown a fair
+            // amount of time to save everything, then make sure the process really ends.
+            ArmExitWatchdog(TimeSpan.FromSeconds(25));
+            _logger.LogInformation("Shutting down");
+
             // Wait for 15 seconds for the host to stop, otherwise kill the process
             if (!host.StopAsync().Wait(timeout: TimeSpan.FromSeconds(15)))
+            {
+                _logger.LogWarning("Background services didn't stop within 15 seconds; ending the process");
+                NLog.LogManager.Flush(TimeSpan.FromSeconds(2));
                 Environment.Exit(0);
+            }
+            _logger.LogInformation("Background services stopped");
         }
+    }
+
+    private static int _exitWatchdogArmed;
+
+    /// <summary>
+    /// Afterburn: ends the process if it is still alive after <paramref name="after"/>, whatever is holding it open.
+    /// </summary>
+    internal static void ArmExitWatchdog(TimeSpan after)
+    {
+        if (Interlocked.Exchange(ref _exitWatchdogArmed, 1) == 1) return;
+        var thread = new Thread(() =>
+        {
+            Thread.Sleep(after);
+            try
+            {
+                _logger.LogWarning("Afterburn was still running {Seconds} seconds after it started closing; ending it now", (int)after.TotalSeconds);
+                NLog.LogManager.Flush(TimeSpan.FromSeconds(2));
+            }
+            catch { /* logging is best effort here */ }
+            Environment.Exit(0);
+        })
+        {
+            IsBackground = true,
+            Name = "Afterburn exit watchdog",
+        };
+        thread.Start();
     }
 
     private static async Task CleanupUnresponsiveProcesses(IServiceProvider serviceProvider)
@@ -518,6 +595,29 @@ public class Program
         }
         catch (NoMainProcessStarted _) when (startupMode.Args is [StatusVerbs.ShowWindowCommand])
         {
+            // Afterburn: the other Afterburn was stuck (no window, not answering) and has just been closed. With no
+            // other copy left, start a fresh one, instead of telling the user to try again. It can't loop: this only
+            // happens when no other Afterburn process exists any more.
+            if (!AnyOtherAfterburnProcess())
+            {
+                _logger.LogInformation("The stuck Afterburn was closed; starting a new one");
+                try
+                {
+                    var exe = Environment.ProcessPath;
+                    if (exe is not null)
+                    {
+                        var info = new ProcessStartInfo { FileName = exe, UseShellExecute = false };
+                        info.Environment["AFTERBURN_RESTARTING"] = "1";
+                        Process.Start(info)?.Dispose();
+                        return 0;
+                    }
+                }
+                catch (Exception e)
+                {
+                    _logger.LogWarning(e, "Couldn't start a new Afterburn");
+                }
+            }
+
             // Afterburn: only sent when another Afterburn is running. Never start a new one from here, or two copies
             // that can't reach each other would keep starting each other.
             _logger.LogWarning("Couldn't reach the running Afterburn to show its window");
