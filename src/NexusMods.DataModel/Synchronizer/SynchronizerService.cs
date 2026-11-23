@@ -85,6 +85,20 @@ public class SynchronizerService : ISynchronizerService
     /// <inheritdoc />
     public async Task Synchronize(LoadoutId loadoutId)
     {
+        // Afterburn: the job system hands errors back wrapped in an AggregateException, so callers' "game is running"
+        // handlers never matched and the user got a crash popup instead of "close the game first". Unwrap it here.
+        try
+        {
+            await SynchronizeCore(loadoutId);
+        }
+        catch (AggregateException e) when (e.Flatten().InnerExceptions.OfType<ExecutableInUseException>().FirstOrDefault() is { } inUse)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(inUse).Throw();
+        }
+    }
+
+    private async Task SynchronizeCore(LoadoutId loadoutId)
+    {
         await _jobMonitor.Begin(new SynchronizeLoadoutJob(loadoutId),
             async ctx =>
             {

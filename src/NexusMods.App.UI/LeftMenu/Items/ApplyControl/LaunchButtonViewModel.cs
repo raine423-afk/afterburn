@@ -81,7 +81,9 @@ public class LaunchButtonViewModel : AViewModel<ILaunchButtonViewModel>, ILaunch
                 }
             }, token);
         }
-        catch (ExecutableInUseException)
+        // Afterburn: also match when the error arrives wrapped (it used to fall through to a crash popup).
+        catch (Exception e) when (e is ExecutableInUseException
+                                  || e is AggregateException agg && agg.Flatten().InnerExceptions.Any(x => x is ExecutableInUseException))
         {
             await MessageBoxOkViewModel.ShowGameAlreadyRunningError(_serviceProvider, marker.Installation.Name);
         }
