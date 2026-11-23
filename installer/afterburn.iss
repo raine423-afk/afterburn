@@ -1,9 +1,9 @@
 ; Inno Setup script for the Afterburn Windows installer.
 ; Built by .github/workflows/build.yaml; to build locally, publish to ..\publish first, then run:
-;   iscc installer\afterburn.iss /DAppVersion=1.3.0
+;   iscc installer\afterburn.iss /DAppVersion=1.3.1
 
 #ifndef AppVersion
-  #define AppVersion "1.3.0"
+  #define AppVersion "1.3.1"
 #endif
 
 [Setup]

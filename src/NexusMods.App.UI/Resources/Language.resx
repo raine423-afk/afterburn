@@ -774,7 +774,8 @@
     </data>
     <data name="ErrorGameAlreadyRunning_Description" xml:space="preserve">
         <value>It looks like {0} is already running.
-To apply changes or launch the game again, please close the game first.</value>
+To apply changes or launch the game again, please close the game first.
+If you already closed it, it may still be shutting down: open Task Manager and end the game's process (for Cyberpunk 2077, look for Cyberpunk2077.exe and REDprelauncher), then try again.</value>
     </data>
     <data name="FileOriginPage_SwitchView" xml:space="preserve">
         <value>Switch View</value>

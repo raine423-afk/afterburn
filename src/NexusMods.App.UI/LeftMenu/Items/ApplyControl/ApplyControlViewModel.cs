@@ -261,7 +261,9 @@ public class ApplyControlViewModel : AViewModel<IApplyControlViewModel>, IApplyC
             
             _notificationService.ShowToast(Language.ToastNotification_Applied__0__successfully, ToastNotificationVariant.Success);
         }
-        catch (ExecutableInUseException)
+        // Afterburn: also match when the error arrives wrapped (it used to fall through to a crash popup).
+        catch (Exception e) when (e is ExecutableInUseException
+                                  || e is AggregateException agg && agg.Flatten().InnerExceptions.Any(x => x is ExecutableInUseException))
         {
             await MessageBoxOkViewModel.ShowGameAlreadyRunningError(_serviceProvider, loadout.Installation.Name);
         }
