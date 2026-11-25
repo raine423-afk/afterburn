@@ -47,6 +47,12 @@ public class LoadoutLeftMenuDesignViewModel : AViewModel<ILoadoutLeftMenuViewMod
         Icon = IconValues.WarningAmber,
     };
 
+    public ILeftMenuItemViewModel LeftMenuItemConflicts { get; } = new LeftMenuItemDesignViewModel
+    {
+        Text = new StringComponent("Conflicts"),
+        Icon = IconValues.Swap,
+    };
+
     public ILeftMenuItemViewModel LeftMenuItemExternalChanges { get; } = new LeftMenuItemDesignViewModel
     {
         Text = new StringComponent(Language.LoadoutLeftMenuViewModel_External_Changes),

@@ -23,6 +23,9 @@ public interface ILoadoutLeftMenuViewModel : ILeftMenuViewModel
 
     /// <summary>Afterburn: the Issues page.</summary>
     public ILeftMenuItemViewModel LeftMenuItemIssues { get; }
+
+    /// <summary>Afterburn: the Conflicts page.</summary>
+    public ILeftMenuItemViewModel LeftMenuItemConflicts { get; }
     
     public ILeftMenuItemViewModel? LeftMenuItemExternalChanges { get; }
 }
