@@ -48,6 +48,7 @@ public class LoadoutLeftMenuViewModel : AViewModel<ILoadoutLeftMenuViewModel>, I
     public ILeftMenuItemViewModel LeftMenuItemHealthCheck { get; }
     public ILeftMenuItemViewModel LeftMenuItemStorage { get; }
     public ILeftMenuItemViewModel LeftMenuItemIssues { get; }
+    public ILeftMenuItemViewModel LeftMenuItemConflicts { get; }
     [Reactive] public ILeftMenuItemViewModel? LeftMenuItemExternalChanges { get; private set; }
     
     [Reactive] public bool HasSingleCollection { get; private set; } = true;
@@ -250,6 +251,25 @@ public class LoadoutLeftMenuViewModel : AViewModel<ILoadoutLeftMenuViewModel>, I
             Text = new StringComponent("Storage"),
             Icon = IconValues.FolderEditOutline,
             ToolTip = new StringComponent("How much disk space Afterburn uses, clean-up, and game-folder files Afterburn didn't install"),
+        };
+
+        // Afterburn: Conflicts (full debugging details for every file conflict)
+        LeftMenuItemConflicts = new LeftMenuItemViewModel(
+            workspaceController,
+            WorkspaceId,
+            new PageData
+            {
+                FactoryId = NexusMods.App.UI.Pages.Conflicts.ConflictsPageFactory.StaticId,
+                Context = new NexusMods.App.UI.Pages.Conflicts.ConflictsPageContext
+                {
+                    LoadoutId = loadoutContext.LoadoutId,
+                },
+            }
+        )
+        {
+            Text = new StringComponent("Conflicts"),
+            Icon = IconValues.Swap,
+            ToolTip = new StringComponent("Every file that two or more mods provide, which copy the game uses, and all the details for debugging"),
         };
 
         // Afterburn: Issues (full details on file conflicts, Health Check results and mod-log errors)

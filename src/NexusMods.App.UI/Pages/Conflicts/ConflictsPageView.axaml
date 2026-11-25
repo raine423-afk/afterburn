@@ -1,0 +1,90 @@
+<reactive:ReactiveUserControl
+    x:TypeArguments="local:IConflictsPageViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:reactive="http://reactiveui.net"
+    xmlns:local="using:NexusMods.App.UI.Pages.Conflicts"
+    mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+    x:CompileBindings="False"
+    x:Class="NexusMods.App.UI.Pages.Conflicts.ConflictsPageView">
+
+    <!-- Afterburn: full debugging details for every file conflict. -->
+    <Grid RowDefinitions="Auto,*" Margin="24,16,24,8">
+
+        <StackPanel Grid.Row="0" Spacing="8" Margin="0,0,0,8">
+            <TextBlock Text="Conflicts" FontSize="20" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" />
+            <TextBlock TextWrapping="Wrap" Opacity="0.75"
+                       Text="A conflict is a file that two or more enabled mods provide with different content. The game can only get one copy: the mod with the highest #rank in the conflict order wins (USED), the others are hidden. Files that several mods provide with identical content aren't conflicts and aren't listed. To change which mod wins, reorder mods in the File Conflicts view, or use Fix automatically." />
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <TextBox Grid.Column="0" Text="{Binding SearchText}" Watermark="Search file paths, mods, hashes, downloads or collections…" Margin="0,0,8,0" />
+                <CheckBox Grid.Column="1" IsChecked="{Binding OnlyHiddenCollectionFiles}" Content="Only files where a collection's copy is hidden" Margin="0,0,8,0" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                    <Button Content="Refresh" Command="{Binding RefreshCommand}" />
+                    <Button Content="Fix automatically" Command="{Binding AutoResolveCommand}"
+                            ToolTip.Tip="Re-runs Afterburn's automatic rules for which mod should win each conflicting file" />
+                    <Button Content="Copy report" Command="{Binding CopyReportCommand}" />
+                    <Button Content="Save report" Command="{Binding SaveReportCommand}" ToolTip.Tip="Saves the full report as a text file in your Downloads folder" />
+                    <Button Content="Save CSV" Command="{Binding SaveCsvCommand}" ToolTip.Tip="One row per copy of each conflicting file, for Excel or a script" />
+                </StackPanel>
+            </Grid>
+            <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Opacity="0.75" />
+        </StackPanel>
+
+        <TabControl Grid.Row="1">
+
+            <TabItem Header="{Binding FilesHeader}">
+                <ListBox ItemsSource="{Binding VisibleFiles}" Background="Transparent">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Spacing="2" Margin="0,6">
+                                <SelectableTextBlock Text="{Binding Header}" FontWeight="SemiBold" TextWrapping="Wrap" FontFamily="Consolas,Menlo,monospace" />
+                                <SelectableTextBlock Text="{Binding Details}" TextWrapping="Wrap" FontFamily="Consolas,Menlo,monospace" Opacity="0.85" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </TabItem>
+
+            <TabItem Header="{Binding PairsHeader}">
+                <ListBox ItemsSource="{Binding VisiblePairs}" Background="Transparent">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Spacing="2" Margin="0,6">
+                                <SelectableTextBlock Text="{Binding Header}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Outcome}" TextWrapping="Wrap" />
+                                <SelectableTextBlock Text="{Binding Samples}" TextWrapping="Wrap" Opacity="0.75" FontFamily="Consolas,Menlo,monospace" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </TabItem>
+
+            <TabItem Header="{Binding ModsHeader}">
+                <ListBox ItemsSource="{Binding VisibleMods}" Background="Transparent">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Spacing="2" Margin="0,6">
+                                <SelectableTextBlock Text="{Binding Header}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Counts}" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding OpponentText}" TextWrapping="Wrap" Opacity="0.75" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </TabItem>
+
+            <TabItem Header="{Binding GroupsHeader}">
+                <ListBox ItemsSource="{Binding VisibleGroups}" Background="Transparent">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="0,3" FontFamily="Consolas,Menlo,monospace" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</reactive:ReactiveUserControl>

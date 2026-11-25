@@ -1,5 +1,6 @@
 using NexusMods.App.UI.Pages.Storage;
 using NexusMods.App.UI.Pages.Issues;
+using NexusMods.App.UI.Pages.Conflicts;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using NexusMods.Abstractions.Diagnostics;
@@ -188,6 +189,8 @@ public static class Services
             .AddViewModel<StoragePageViewModel, IStoragePageViewModel>()
             .AddView<IssuesPageView, IIssuesPageViewModel>()
             .AddViewModel<IssuesPageViewModel, IIssuesPageViewModel>()
+            .AddView<ConflictsPageView, IConflictsPageViewModel>()
+            .AddViewModel<ConflictsPageViewModel, IConflictsPageViewModel>()
             .AddViewModel<ChangelogPageViewModel, IChangelogPageViewModel>()
 
             .AddView<TextEditorPageView, ITextEditorPageViewModel>()
@@ -271,6 +274,7 @@ public static class Services
             .AddSingleton<IPageFactory, ChangelogPageFactory>()
             .AddSingleton<IPageFactory, StoragePageFactory>()
             .AddSingleton<IPageFactory, IssuesPageFactory>()
+            .AddSingleton<IPageFactory, ConflictsPageFactory>()
             .AddSingleton<IPageFactory, TextEditorPageFactory>()
             .AddSingleton<IPageFactory, MyLoadoutsPageFactory>()
             .AddSingleton<IPageFactory, LibraryPageFactory>()
